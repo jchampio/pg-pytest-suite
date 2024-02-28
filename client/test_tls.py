@@ -2,6 +2,7 @@ import datetime
 import ssl
 import sys
 
+import psycopg2
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -54,8 +55,9 @@ def certpair():
 
 def test_direct_ssl(accept, certpair):
     sock, client = accept(
+        host="example.org",
         sslnegotiation="requiredirect",
-        sslmode="require",
+        sslmode="verify-full",
         sslrootcert=certpair[0],
     )
     with sock:

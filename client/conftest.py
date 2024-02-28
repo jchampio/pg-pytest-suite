@@ -44,7 +44,7 @@ class ClientHandshake(threading.Thread):
 
     def run(self):
         try:
-            conn = psycopg2.connect(host="127.0.0.1", **self._kwargs)
+            conn = psycopg2.connect(hostaddr="127.0.0.1", **self._kwargs)
             self._pump_async(conn)
             conn.close()
         except Exception as e:
