@@ -74,3 +74,50 @@ def test_direct_ssl(accept, certpair):
             assert startup.proto == pq3.protocol(3, 0)
 
             finish_handshake(tls)
+
+
+@pytest.mark.parametrize(
+    "mode, reconnect",
+    [
+        ("direct", True),
+        ("requiredirect", False),
+    ],
+)
+def test_direct_ssl_failure(accept, certpair, mode, reconnect):
+    sock, client = accept(
+        host="example.org",
+        sslnegotiation=mode,
+        sslmode="verify-full",
+        sslrootcert=certpair[0],
+    )
+    with sock:
+        with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
+            # Emulate an older server: read the "packet length" and complain.
+            conn.read(4)
+            conn.flush_debug(prefix="  ")
+
+            pq3.send(
+                conn,
+                pq3.types.ErrorResponse,
+                fields=[
+                    b"SFATAL",
+                    b"C08P01",  # ERRCODE_PROTOCOL_VIOLATION
+                    b"Minvalid length of startup packet",
+                ],
+            )
+
+    if reconnect:
+        # The client should reconnect with the old-style SSL handshake.
+        sock, _ = accept()
+
+        with sock:
+            with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
+                startup = pq3.recv1(conn, cls=pq3.Startup)
+                assert startup.proto == pq3.protocol(1234, 5679)
+
+                # Reject this one too.
+                conn.write(b"N")
+
+    # TODO: check the actual error message
+    with pytest.raises(psycopg2.OperationalError, match="TODO"):
+        client.check_completed()
