@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: PostgreSQL
 #
 
+import ctypes
 import socket
 import sys
 import threading
@@ -135,3 +136,36 @@ def conn(accept):
     with sock:
         with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
             yield conn
+
+
+class PQConnInfoOption(ctypes.Structure):
+    """The structure returned by PQconndefaults()."""
+
+    _fields_ = [
+        ("keyword", ctypes.c_char_p),
+        ("envvar", ctypes.c_char_p),
+        ("compiled", ctypes.c_char_p),
+        ("val", ctypes.c_char_p),
+        ("label", ctypes.c_char_p),
+        ("dispchar", ctypes.c_char_p),
+        ("dispsize", ctypes.c_int),
+    ]
+
+
+def libpq_has_option(optname: str) -> bool:
+    """
+    Checks PQconndefaults() to see if the given option is supported. Useful for
+    skipping tests conditionally.
+    """
+    libpq = ctypes.cdll.LoadLibrary("libpq.so.5")
+    libpq.PQconndefaults.restype = ctypes.POINTER(PQConnInfoOption)
+
+    opts = libpq.PQconndefaults()
+    i = 0
+
+    while opts[i].keyword is not None:
+        if opts[i].keyword.decode() == optname:
+            return True
+        i += 1
+
+    return False

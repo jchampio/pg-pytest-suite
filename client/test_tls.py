@@ -11,6 +11,7 @@ from cryptography.x509.oid import NameOID
 
 import pq3
 
+from .conftest import libpq_has_option
 from .test_client import finish_handshake
 
 
@@ -53,7 +54,14 @@ def certpair():
     return "./cert.pem", "./key.pem"
 
 
+def require_libpq_option(opt):
+    if not libpq_has_option(opt):
+        pytest.skip(f"libpq must support {opt}")
+
+
 def test_direct_ssl(accept, certpair):
+    require_libpq_option("sslnegotiation")
+
     sock, client = accept(
         host="example.org",
         sslnegotiation="requiredirect",
@@ -84,6 +92,8 @@ def test_direct_ssl(accept, certpair):
     ],
 )
 def test_direct_ssl_failure(accept, certpair, mode, reconnect):
+    require_libpq_option("sslnegotiation")
+
     sock, client = accept(
         host="example.org",
         sslnegotiation=mode,
