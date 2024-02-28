@@ -59,6 +59,9 @@ def require_libpq_option(opt):
         pytest.skip(f"libpq must support {opt}")
 
 
+ALPN_PROTO = "TBD-pgsql"  # our ALPN protocol identifier
+
+
 def test_direct_ssl(accept, certpair):
     require_libpq_option("sslnegotiation")
 
@@ -72,10 +75,12 @@ def test_direct_ssl(accept, certpair):
         with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
             ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             ctx.load_cert_chain(*certpair)
+            ctx.set_alpn_protocols([ALPN_PROTO])
 
             tls = pq3._TLSStream(conn, ctx, server_side=True)
-
             tls.handshake()
+            assert tls._ssl.selected_alpn_protocol() == ALPN_PROTO
+
             tls = pq3._DebugStream(tls, conn._out)
 
             startup = pq3.recv1(tls, cls=pq3.Startup)
