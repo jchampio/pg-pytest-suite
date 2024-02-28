@@ -31,7 +31,7 @@ from .conftest import BLOCKING_TIMEOUT
 # The client tests need libpq to have been compiled with OAuth support; skip
 # them otherwise.
 pytestmark = pytest.mark.skipif(
-    os.getenv("with_oauth") == "none",
+    os.getenv("with_oauth") in ("none", None),
     reason="OAuth client tests require --with-oauth support",
 )
 
