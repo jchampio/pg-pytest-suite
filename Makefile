@@ -20,7 +20,7 @@ override BLACK  := $(VBIN)/black
 .PHONY: installcheck indent
 
 installcheck: $(PYTEST)
-	$(PYTEST) -v -rs
+	$(PYTEST) -v -rs --temp-instance=./tmp_install
 
 indent: $(ISORT) $(BLACK)
 	$(ISORT) --profile black *.py client/*.py server/*.py
