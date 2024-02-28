@@ -571,13 +571,13 @@ class _TLSStream(object):
     control over the TLS layer.
     """
 
-    def __init__(self, stream, context):
+    def __init__(self, stream, context, server_side=False):
         self._stream = stream
         self._debugging = hasattr(stream, "flush_debug")
 
         self._in = ssl.MemoryBIO()
         self._out = ssl.MemoryBIO()
-        self._ssl = context.wrap_bio(self._in, self._out)
+        self._ssl = context.wrap_bio(self._in, self._out, server_side)
 
     def handshake(self):
         try:

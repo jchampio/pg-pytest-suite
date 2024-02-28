@@ -1,3 +1,4 @@
 __pycache__/
 /tmp_install/
 /venv/
+/*.pem
