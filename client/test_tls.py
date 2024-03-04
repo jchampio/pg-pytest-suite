@@ -89,6 +89,35 @@ def test_direct_ssl(accept, certpair):
             finish_handshake(tls)
 
 
+def test_direct_ssl_without_alpn(accept, certpair):
+    require_libpq_option("sslnegotiation")
+
+    sock, client = accept(
+        host="example.org",
+        sslnegotiation="requiredirect",
+        sslmode="verify-full",
+        sslrootcert=certpair[0],
+    )
+    with sock:
+        with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
+            ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ctx.load_cert_chain(*certpair)
+
+            # Don't select the ALPN protocol.
+            # ctx.set_alpn_protocols([ALPN_PROTO])
+
+            tls = pq3._TLSStream(conn, ctx, server_side=True)
+            tls.handshake()
+            assert tls._ssl.selected_alpn_protocol() == None
+
+            # The client shouldn't send anything more.
+            assert not tls.read()
+
+    # TODO: decide on the actual error message
+    with pytest.raises(psycopg2.OperationalError, match="TODO"):
+        client.check_completed()
+
+
 @pytest.mark.parametrize(
     "mode, reconnect",
     [
@@ -96,7 +125,7 @@ def test_direct_ssl(accept, certpair):
         ("requiredirect", False),
     ],
 )
-def test_direct_ssl_failure(accept, certpair, mode, reconnect):
+def test_direct_ssl_failed_negotiation(accept, certpair, mode, reconnect):
     require_libpq_option("sslnegotiation")
 
     sock, client = accept(
