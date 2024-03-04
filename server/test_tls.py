@@ -90,7 +90,14 @@ def require_direct_ssl_support(postgres_instance):
             pytest.skip("server does not support ssl_enable_alpn")
 
 
-def test_direct_tls(ssl_ctx, connect, require_direct_ssl_support):
+@pytest.mark.parametrize(
+    "protos",
+    (
+        pytest.param([ALPN_PROTO], id="standard ALPN advertisement"),
+        pytest.param(["http/1.1", ALPN_PROTO], id="additional protocols"),
+    ),
+)
+def test_direct_tls(ssl_ctx, connect, require_direct_ssl_support, protos):
     """
     Tests direct TLS connections (i.e. sslnegotiation=requiredirect in libpq).
     """
@@ -101,8 +108,9 @@ def test_direct_tls(ssl_ctx, connect, require_direct_ssl_support):
     # TODO: export a helper for this from pq3
     tls = pq3._TLSStream(conn, ctx, server_hostname="example.org")
     tls.handshake()
-    tls = pq3._DebugStream(tls, conn._out)
+    assert tls._ssl.selected_alpn_protocol() == ALPN_PROTO
 
+    tls = pq3._DebugStream(tls, conn._out)
     pq3.handshake(tls, user=pq3.pguser(), database=pq3.pgdatabase())
 
     pq3.send(tls, pq3.types.Query, query=b"")
