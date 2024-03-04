@@ -1,6 +1,7 @@
 #
 # Portions Copyright 2021 VMware, Inc.
 # Portions Copyright 2023 Timescale, Inc.
+# Portions Copyright (c) 2024, PostgreSQL Global Development Group
 # SPDX-License-Identifier: PostgreSQL
 #
 

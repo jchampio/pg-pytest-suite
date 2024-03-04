@@ -1,5 +1,6 @@
 #
 # Copyright 2021 VMware, Inc.
+# Portions Copyright (c) 2024, PostgreSQL Global Development Group
 # SPDX-License-Identifier: PostgreSQL
 #
 
