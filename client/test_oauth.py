@@ -26,12 +26,12 @@ import pytest
 
 import pq3
 
-from .conftest import BLOCKING_TIMEOUT
+from .conftest import BLOCKING_TIMEOUT, libpq_has_option
 
 # The client tests need libpq to have been compiled with OAuth support; skip
 # them otherwise.
 pytestmark = pytest.mark.skipif(
-    os.getenv("with_oauth") in ("none", None),
+    not libpq_has_option("oauth_issuer"),
     reason="OAuth client tests require --with-oauth support",
 )
 
