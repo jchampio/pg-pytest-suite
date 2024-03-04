@@ -34,6 +34,26 @@ SHARED_MEM_NAME = "oauth-pytest"
 MAX_UINT16 = 2**16 - 1
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _check_oauth_support(postgres_instance):
+    """
+    Automatically skips this test module if oauth_validator_library isn't
+    supported by the server we're testing.
+    """
+    host, port = postgres_instance
+    conn = psycopg2.connect(host=host, port=port)
+
+    with contextlib.closing(conn):
+        c = conn.cursor()
+
+        c.execute(
+            "SELECT name FROM pg_settings WHERE name = %s",
+            ("oauth_validator_library",),
+        )
+        if c.fetchone() == None:
+            pytest.skip("server does not support oauth_validator_library")
+
+
 @contextlib.contextmanager
 def prepend_file(path, lines):
     """

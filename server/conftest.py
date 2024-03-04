@@ -49,6 +49,29 @@ def cleanup_prior_instance(datadir):
     shutil.rmtree(datadir)
 
 
+def _server_supports(datadir, guc):
+    """
+    Checks whether the server supports a specific GUC. The server doesn't need
+    to be running.
+    """
+    res = subprocess.run(
+        ["postgres", "-D", datadir, "-C", guc],
+        capture_output=True,
+        text=True,
+    )
+
+    try:
+        res.check_returncode()
+    except subprocess.CalledProcessError as err:
+        if err.returncode != 1:
+            raise
+        if "unrecognized configuration parameter" not in err.stderr:
+            raise
+        return False
+
+    return True
+
+
 @pytest.fixture(scope="session")
 def postgres_instance(pytestconfig, unused_tcp_port_factory):
     """
@@ -73,6 +96,20 @@ def postgres_instance(pytestconfig, unused_tcp_port_factory):
         log = os.path.join(datadir, "postmaster.log")
         port = unused_tcp_port_factory()
 
+        options = [
+            f"-c port={port}",
+            "-c listen_addresses=localhost",
+            "-c log_connections=on",
+        ]
+
+        if _server_supports(datadir, "oauth_validator_library"):
+            options.extend(
+                [
+                    "-c shared_preload_libraries=oauthtest",
+                    "-c oauth_validator_library=oauthtest",
+                ]
+            )
+
         subprocess.run(
             [
                 "pg_ctl",
@@ -81,15 +118,7 @@ def postgres_instance(pytestconfig, unused_tcp_port_factory):
                 "-l",
                 log,
                 "-o",
-                " ".join(
-                    [
-                        f"-c port={port}",
-                        "-c listen_addresses=localhost",
-                        "-c log_connections=on",
-                        "-c shared_preload_libraries=oauthtest",
-                        "-c oauth_validator_library=oauthtest",
-                    ]
-                ),
+                " ".join(options),
                 "start",
             ],
             check=True,
