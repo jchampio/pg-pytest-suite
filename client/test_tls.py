@@ -63,6 +63,9 @@ ALPN_PROTO = "TBD-pgsql"  # our ALPN protocol identifier
 
 
 def test_direct_ssl(accept, certpair):
+    """
+    Happy path for sslnegotiation=requiredirect.
+    """
     require_libpq_option("sslnegotiation")
 
     sock, client = accept(
@@ -90,6 +93,10 @@ def test_direct_ssl(accept, certpair):
 
 
 def test_direct_ssl_without_alpn(accept, certpair):
+    """
+    Ensure that the client hangs up on a server that doesn't select our ALPN
+    identifier.
+    """
     require_libpq_option("sslnegotiation")
 
     sock, client = accept(
@@ -111,7 +118,7 @@ def test_direct_ssl_without_alpn(accept, certpair):
             assert tls._ssl.selected_alpn_protocol() == None
 
             # The client shouldn't send anything more.
-            assert not tls.read()
+            assert not tls.read(), "client sent unexpected data"
 
     # TODO: decide on the actual error message
     with pytest.raises(psycopg2.OperationalError, match="TODO"):
@@ -126,6 +133,10 @@ def test_direct_ssl_without_alpn(accept, certpair):
     ],
 )
 def test_direct_ssl_failed_negotiation(accept, certpair, mode, reconnect):
+    """
+    Test that the client displays a useful message when attempting direct SSL
+    with a server that doesn't support it.
+    """
     require_libpq_option("sslnegotiation")
 
     sock, client = accept(
