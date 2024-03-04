@@ -1,4 +1,6 @@
 import datetime
+import functools
+import os
 import ssl
 import sys
 
@@ -39,7 +41,8 @@ def certpair():
         .not_valid_after(now + datetime.timedelta(minutes=10))
     ).sign(key, hashes.SHA256())
 
-    with open("./key.pem", "wb") as f:
+    # Writing the key with mode 0600 lets us use this from the server side, too.
+    with open("./key.pem", "wb", opener=functools.partial(os.open, mode=0o600)) as f:
         f.write(
             key.private_bytes(
                 encoding=serialization.Encoding.PEM,

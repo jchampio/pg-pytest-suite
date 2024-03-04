@@ -572,13 +572,13 @@ class _TLSStream(object):
     control over the TLS layer.
     """
 
-    def __init__(self, stream, context, server_side=False):
+    def __init__(self, stream, context, server_side=False, server_hostname=None):
         self._stream = stream
         self._debugging = hasattr(stream, "flush_debug")
 
         self._in = ssl.MemoryBIO()
         self._out = ssl.MemoryBIO()
-        self._ssl = context.wrap_bio(self._in, self._out, server_side)
+        self._ssl = context.wrap_bio(self._in, self._out, server_side, server_hostname)
 
     def handshake(self):
         try:
@@ -691,7 +691,7 @@ class _TLSStream(object):
 
 
 @contextlib.contextmanager
-def tls_handshake(stream, context):
+def tls_handshake(stream, context, *, server_hostname=None):
     """
     Performs a TLS handshake over the given stream (which must have been created
     via a call to wrap()), and returns a new stream which transparently tunnels
@@ -715,7 +715,7 @@ def tls_handshake(stream, context):
     if resp != b"S":
         raise RuntimeError(f"unexpected response of type {resp!r} during TLS startup")
 
-    tls = _TLSStream(stream, context)
+    tls = _TLSStream(stream, context, server_hostname=server_hostname)
     tls.handshake()
 
     if debugging:
