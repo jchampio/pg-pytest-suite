@@ -107,19 +107,11 @@ def test_direct_ssl_failure(accept, certpair, mode, reconnect):
     )
     with sock:
         with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
-            # Emulate an older server: read the "packet length" and complain.
-            conn.read(4)
+            # Emulate an older server: read an 8k block from the socket...
+            conn.read(8192)
             conn.flush_debug(prefix="  ")
 
-            pq3.send(
-                conn,
-                pq3.types.ErrorResponse,
-                fields=[
-                    b"SFATAL",
-                    b"C08P01",  # ERRCODE_PROTOCOL_VIOLATION
-                    b"Minvalid length of startup packet",
-                ],
-            )
+            # ...then drop the connection.
 
     if reconnect:
         # The client should reconnect with the old-style SSL handshake.
@@ -133,6 +125,6 @@ def test_direct_ssl_failure(accept, certpair, mode, reconnect):
                 # Reject this one too.
                 conn.write(b"N")
 
-    # TODO: check the actual error message
+    # TODO: decide on the actual error message
     with pytest.raises(psycopg2.OperationalError, match="TODO"):
         client.check_completed()
