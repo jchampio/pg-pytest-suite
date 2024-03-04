@@ -116,3 +116,26 @@ def test_direct_tls(ssl_ctx, connect, require_direct_ssl_support, protos):
     pq3.send(tls, pq3.types.Query, query=b"")
     resp = pq3.recv1(tls)
     assert resp.type == pq3.types.EmptyQueryResponse
+
+
+@pytest.mark.parametrize(
+    "protos",
+    (
+        pytest.param([], id="no application protocols"),
+        pytest.param(["http/1.1"], id="incorrect application protocol"),
+    ),
+)
+def test_direct_ssl_without_alpn(ssl_ctx, connect, require_direct_ssl_support, protos):
+    """
+    Make sure the server rejects direct connections without the expected ALPN.
+    """
+    conn = connect()
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ssl_ctx.ca)
+
+    # Do not set up the expected ALPN.
+    ctx.set_alpn_protocols(protos)
+
+    tls = pq3._TLSStream(conn, ctx, server_hostname="example.org")
+
+    with pytest.raises(ssl.SSLError, match="no application protocol"):
+        tls.handshake()
