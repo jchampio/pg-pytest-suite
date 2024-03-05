@@ -20,6 +20,7 @@ override BLACK  := $(VBIN)/black
 
 .PHONY: installcheck indent
 
+installcheck: export PGDATABASE=postgres
 installcheck: $(PYTEST)
 	$(PYTEST) -v -ra --temp-instance=./tmp_install
 

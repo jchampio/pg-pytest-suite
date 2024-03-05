@@ -90,7 +90,10 @@ def postgres_instance(pytestconfig, unused_tcp_port_factory):
         # We were told to create a temporary instance. Use pg_ctl to set it up
         # on an unused port.
         cleanup_prior_instance(datadir)
-        subprocess.run(["pg_ctl", "-D", datadir, "init"], check=True)
+        try:
+            subprocess.run(["pg_ctl", "-D", datadir, "init"], check=True)
+        except FileNotFoundError:
+            pytest.skip("--temp-instance requires pg_ctl to be in the PATH")
 
         # The CI looks for *.log files to upload, so the file name here isn't
         # completely arbitrary.
