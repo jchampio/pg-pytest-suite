@@ -5,7 +5,9 @@
 #
 
 import ctypes
+import os
 import socket
+import struct
 import sys
 import threading
 
@@ -90,7 +92,9 @@ def accept(server_socket):
     For situations where a client needs to connect more than once to complete a
     handshake, the accept function may be called more than once. (The client
     returned for subsequent calls will always be the same client that was
-    returned for the first call.)
+    returned for the first call.) To avoid interfering with tests, fixtures that
+    need to perform their own independent accept() call should call
+    accept.reset() to clear the internal client once their work is done.
 
     Tests must either complete the handshake so that the client thread can be
     automatically joined during teardown, or else call client.check_completed()
@@ -98,32 +102,43 @@ def accept(server_socket):
     """
     _, port = server_socket.getsockname()
 
-    client = None
     default_opts = dict(
         port=port,
         user=pq3.pguser(),
         sslmode="disable",
     )
 
-    def factory(**kwargs):
-        nonlocal client
+    class _Accept(object):
+        client = None
 
-        if client is None:
-            opts = dict(default_opts)
-            opts.update(kwargs)
+        def __call__(self, **kwargs):
+            if self.client is None:
+                opts = dict(default_opts)
+                opts.update(kwargs)
 
-            # The server_socket is already listening, so the client thread can
-            # be safely started; it'll block on the connection until we accept.
-            client = ClientHandshake(**opts)
-            client.start()
+                # The server_socket is already listening, so the client thread
+                # can be safely started; it'll block on the connection until we
+                # accept.
+                self.client = ClientHandshake(**opts)
+                self.client.start()
 
-        sock, _ = server_socket.accept()
-        return sock, client
+            sock, _ = server_socket.accept()
+            return sock, self.client
 
-    yield factory
+        def reset(self):
+            """
+            Joins any current client thread, then resets for a new call.
+            """
+            if self.client is not None:
+                self.client.check_completed()
 
-    if client is not None:
-        client.check_completed()
+            self.client = None
+
+    a = _Accept()
+    yield a
+
+    if a.client is not None:
+        a.client.check_completed()
 
 
 @pytest.fixture
@@ -170,3 +185,100 @@ def libpq_has_option(optname: str) -> bool:
         i += 1
 
     return False
+
+
+@pytest.fixture
+def gss_cred_cache():
+    """
+    Sets up a fake Kerberos credentials cache.
+    """
+    AES128_CTS_HMAC_SHA256_128 = 19
+    KRB_NT_PRINCIPAL = 1
+    KRB_NT_SRV_INST = 2
+    IPV4 = 2
+
+    def write_data(f, b: bytes):
+        f.write(struct.pack(">I", len(b)))
+        f.write(b)
+
+    def write_principal(f, typ, realm, *components):
+        f.write(
+            struct.pack(
+                ">II",
+                typ,
+                len(components),
+            )
+        )
+
+        write_data(f, realm)
+        for c in components:
+            write_data(f, c)
+
+    def write_addresses(f, typ, *addresses):
+        f.write(struct.pack(">I", len(addresses)))
+        for a in addresses:
+            f.write(struct.pack(">H", typ))
+            write_data(f, a)
+
+    realm = b"EXAMPLE.ORG"
+
+    filename = "krb.ccache"
+    with open(filename, "wb") as cache:
+        # Header
+        cache.write(b"\x05")  # krb5 magic byte
+        cache.write(struct.pack(">B", 4))  # format version 4
+        cache.write(struct.pack(">H", 0))  # header length (no contents)
+
+        # Default Principal
+        write_principal(cache, KRB_NT_PRINCIPAL, realm, b"user")
+
+        # Credential
+        write_principal(cache, KRB_NT_PRINCIPAL, realm, b"user")  # client
+        write_principal(cache, KRB_NT_SRV_INST, realm, b"server")  # server
+        cache.write(struct.pack(">H", AES128_CTS_HMAC_SHA256_128))  # enctype
+        write_data(cache, b"x" * 32)  # 256-bit key
+        cache.write(
+            struct.pack(
+                ">IIIIBI",
+                0,  # auth time
+                0,  # start time
+                2**32 - 1,  # end time
+                0,  # renew till
+                0,  # is_skey
+                0,  # ticket flags
+            )
+        )
+        write_addresses(cache, IPV4, b"\x7F\x00\x00\x01")
+        cache.write(struct.pack(">I", 0))  # no authorizationdata
+        write_data(cache, b"ticket")
+        write_data(cache, b"second_ticket")
+
+    os.environ["KRB5CCNAME"] = f"FILE:{os.path.abspath(filename)}"
+    try:
+        yield
+    finally:
+        del os.environ["KRB5CCNAME"]
+
+
+@pytest.fixture
+def require_gssapi(accept, gss_cred_cache):
+    """Skips a dependent test if libpq doesn't have GSSAPI support."""
+    supported = False
+
+    sock, client = accept(gssencmode="prefer")
+    with sock:
+        with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
+            startup = pq3.recv1(conn, cls=pq3.Startup)
+
+            if startup.proto == pq3.protocol(1234, 5680):  # GSSENCRequest
+                supported = True
+
+    expected_error = "server closed the connection unexpectedly"
+    with pytest.raises(psycopg2.OperationalError, match=expected_error):
+        client.check_completed()
+
+    if not supported:
+        pytest.skip("client was not built --with-gssapi")
+
+    # Let the test set up its own client.
+    accept.reset()

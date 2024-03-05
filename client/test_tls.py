@@ -1,5 +1,6 @@
 import datetime
 import functools
+import io
 import os
 import ssl
 import sys
@@ -12,6 +13,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 import pq3
+import tls
 
 from .conftest import libpq_has_option
 from .test_client import finish_handshake
@@ -167,6 +169,57 @@ def test_direct_ssl_failed_negotiation(accept, certpair, mode, reconnect):
 
                 # Reject this one too.
                 conn.write(b"N")
+
+    # TODO: decide on the actual error message
+    with pytest.raises(psycopg2.OperationalError, match="TODO"):
+        client.check_completed()
+
+
+def test_gssapi_negotiation(require_gssapi, accept, certpair):
+    """
+    Test the expected order of fallbacks.
+    TODO: it's not clear that this is the _desired_ order of fallbacks.
+    """
+    require_libpq_option("sslnegotiation")
+
+    sock, client = accept(
+        host="example.org",
+        gssencmode="prefer",
+        sslnegotiation="direct",
+        sslmode="verify-full",
+        sslrootcert=certpair[0],
+    )
+
+    with sock:
+        with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
+            # First attempt is GSS.
+            startup = pq3.recv1(conn, cls=pq3.Startup)
+            assert startup.proto == pq3.protocol(1234, 5680)
+
+            # Reject it.
+            conn.write(b"N")
+            conn.flush_debug(prefix="  ")
+
+            # Second attempt is standard SSL.
+            startup = pq3.recv1(conn, cls=pq3.Startup)
+            assert startup.proto == pq3.protocol(1234, 5679)
+
+            # Reject it, too.
+            conn.write(b"N")
+            conn.flush_debug(prefix="  ")
+
+    # Accept the next connection, which should be direct SSL.
+    sock, _ = accept()
+    with sock:
+        with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
+            # Don't complete the handshake, but make sure it's actually a
+            # client_hello.
+            pkt = pq3.recv1(conn, cls=tls.Plaintext)
+            inner = io.BytesIO(pkt.fragment)
+            handshake = tls.Handshake.parse_stream(inner)
+            assert handshake.msg_type == tls.HandshakeType.client_hello
+
+            # Reject the direct SSL connection by dropping it.
 
     # TODO: decide on the actual error message
     with pytest.raises(psycopg2.OperationalError, match="TODO"):
