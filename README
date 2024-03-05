@@ -7,19 +7,12 @@ spins up various ephemeral TCP services. This is not safe for production servers
 and therefore must be explicitly opted into by setting PG_TEST_EXTRA=python in
 the environment.
 
-The test suite currently assumes that the standard PG* environment variables
-point to the database under test and are sufficient to log in a superuser on
-that system. In other words, a bare `psql` needs to Just Work before the test
-suite can do its thing. For a newly built dev cluster, typically all that I need
-to do is a
-
-    export PGDATABASE=postgres
-
-but you can adjust as needed for your setup. See also 'Advanced Usage' below.
-
 ## Requirements
 
-A supported version (3.6+) of Python.
+A supported version (3.6+) of Python, and a local installation of Postgres to
+test. Client tests require a linkable libpq; server tests require either
+`pg_ctl` in the PATH (if using `make installcheck` or `py.test --temp-instance`)
+or a running server to connect to.
 
 The first run of
 
@@ -31,6 +24,16 @@ development, if libpq changes incompatibly, you can issue
     $ make rebuild-psycopg2
 
 to force a rebuild of the client library.
+
+If you're testing an already-running server, the test suite currently assumes
+that the standard PG* environment variables point to the database under test and
+are sufficient to log in a superuser on that system. In other words, a bare
+`psql` needs to Just Work before the test suite can do its thing. For a newly
+built dev cluster, typically all that I need to do is a
+
+    export PGDATABASE=postgres
+
+but you can adjust as needed for your setup. See also 'Advanced Usage' below.
 
 ## Hacking
 
