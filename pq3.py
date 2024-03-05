@@ -654,6 +654,10 @@ class _TLSStream(object):
                 return operation()
             except (ssl.SSLWantReadError, ssl.SSLWantWriteError) as e:
                 want = e
+            except ssl.SSLError:
+                self.flush()  # a TLS alert is probably queued up for the peer
+                raise
+
             self._read_write(want)
 
     def _recv(self, maxsize):
