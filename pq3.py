@@ -182,6 +182,7 @@ types = ByteEnum(
     ParameterStatus=b"S",
     DataRow=b"D",
     Terminate=b"X",
+    NegotiateProtocolVersion=b"v",
 )
 
 
@@ -253,6 +254,11 @@ _payload_map = {
     ),
     types.DataRow: Struct("columns" / Default(PrefixedArray(Int16sb, _column), b"")),
     types.Terminate: Terminated,
+    types.NegotiateProtocolVersion: Struct(
+        "version" / Hex(Int32ub),
+        "unsupported"
+        / Default(PrefixedArray(Int32ub, NullTerminated(GreedyBytes)), b""),
+    ),
 }
 
 

@@ -246,6 +246,36 @@ def test_Startup_build(packet, expected_bytes):
             b"",
             id="Terminate",
         ),
+        pytest.param(
+            b"v\x00\x00\x00\x1A\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00",
+            dict(
+                type=pq3.types.NegotiateProtocolVersion,
+                len=26,
+                payload=dict(version=3, unsupported=[b"_pq_.1", b"_pq_.2"]),
+            ),
+            b"",
+            id="NegotiateProtocolVersion",
+        ),
+        pytest.param(
+            b"v\x00\x00\x00\x0C\x00\x00\x00\x03\x00\x00\x00\x00",
+            dict(
+                type=pq3.types.NegotiateProtocolVersion,
+                len=12,
+                payload=dict(version=3, unsupported=[]),
+            ),
+            b"",
+            id="NegotiateProtocolVersion with no unsupported",
+        ),
+        pytest.param(
+            b"v\x00\x00\x00\x1A\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00\x00",
+            dict(
+                type=pq3.types.NegotiateProtocolVersion,
+                len=26,
+                payload=dict(version=3, unsupported=[b"_pq_.1", b"_pq_.2"]),
+            ),
+            b"\x00",
+            id="NegotiateProtocolVersion with extra bytes",
+        ),
     ],
 )
 def test_Pq3_parse(raw, expected, extra):
@@ -358,6 +388,19 @@ def test_Pq3_parse(raw, expected, extra):
             dict(type=pq3.types.Terminate),
             b"X\x00\x00\x00\x04",
             id="implied len for Terminate",
+        ),
+        pytest.param(
+            dict(
+                type=pq3.types.NegotiateProtocolVersion,
+                payload=dict(version=3, unsupported=[b"_pq_.1", b"_pq_.2"]),
+            ),
+            b"v\x00\x00\x00\x1A\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00",
+            id="implied len for NegotiateProtocolVersion",
+        ),
+        pytest.param(
+            dict(type=pq3.types.NegotiateProtocolVersion, payload=dict(version=3)),
+            b"v\x00\x00\x00\x0C\x00\x00\x00\x03\x00\x00\x00\x00",
+            id="default unsupported for NegotiateProtocolVersion",
         ),
     ],
 )
