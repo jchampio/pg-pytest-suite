@@ -604,6 +604,24 @@ def recv1(stream, *, cls=Pq3):
     return resp
 
 
+def receive_until(stream, msg_type):
+    """
+    Pulls packets off a pq3 connection until a message with the desired type is
+    found, or an error response is received.
+    """
+    while True:
+        resp = recv1(stream)
+        if resp is None:
+            raise RuntimeError("server closed connection")
+
+        if resp.type == msg_type:
+            return resp
+        elif resp.type == types.ErrorResponse:
+            raise RuntimeError(
+                f"received error response from peer: {resp.payload.fields!r}"
+            )
+
+
 def handshake(stream, **kwargs):
     """
     Performs a libpq v3 startup handshake. kwargs should contain the key/value
@@ -614,17 +632,7 @@ def handshake(stream, **kwargs):
 
     # Receive and dump packets until the server indicates it's ready for our
     # first query.
-    while True:
-        resp = recv1(stream)
-        if resp is None:
-            raise RuntimeError("server closed connection during handshake")
-
-        if resp.type == types.ReadyForQuery:
-            return
-        elif resp.type == types.ErrorResponse:
-            raise RuntimeError(
-                f"received error response from peer: {resp.payload.fields!r}"
-            )
+    receive_until(stream, types.ReadyForQuery)
 
 
 # TLS

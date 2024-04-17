@@ -230,7 +230,7 @@ def expect_handshake_success(conn):
     assert resp.payload.type == pq3.authn.OK
     assert not resp.payload.body
 
-    receive_until(conn, pq3.types.ReadyForQuery)
+    pq3.receive_until(conn, pq3.types.ReadyForQuery)
 
 
 def expect_handshake_failure(conn, oauth_ctx):
@@ -260,22 +260,6 @@ def expect_handshake_failure(conn, oauth_ctx):
 
     err = ExpectedError(INVALID_AUTHORIZATION_ERRCODE, "bearer authentication failed")
     err.match(resp)
-
-
-def receive_until(conn, type):
-    """
-    receive_until pulls packets off the pq3 connection until a packet with the
-    desired type is found, or an error response is received.
-    """
-    while True:
-        pkt = pq3.recv1(conn)
-
-        if pkt.type == type:
-            return pkt
-        elif pkt.type == pq3.types.ErrorResponse:
-            raise RuntimeError(
-                f"received error response from peer: {pkt.payload.fields!r}"
-            )
 
 
 @pytest.fixture()
@@ -342,7 +326,7 @@ def test_oauth(setup_validator, connect, oauth_ctx, auth_prefix, token_len):
 
     # Make sure that the server has not set an authenticated ID.
     pq3.send(conn, pq3.types.Query, query=b"SELECT system_user;")
-    resp = receive_until(conn, pq3.types.DataRow)
+    resp = pq3.receive_until(conn, pq3.types.DataRow)
 
     row = resp.payload
     assert row.columns == [None]
@@ -458,7 +442,7 @@ def test_oauth_authn_id(
 
     # Check the reported authn_id.
     pq3.send(conn, pq3.types.Query, query=b"SELECT system_user;")
-    resp = receive_until(conn, pq3.types.DataRow)
+    resp = pq3.receive_until(conn, pq3.types.DataRow)
 
     expected = authn_id
     if expected is not None:
@@ -953,7 +937,7 @@ def test_oauth_validator_role(setup_validator, oauth_ctx, connect, user):
 
     # Check the user identity.
     pq3.send(conn, pq3.types.Query, query=b"SELECT system_user;")
-    resp = receive_until(conn, pq3.types.DataRow)
+    resp = pq3.receive_until(conn, pq3.types.DataRow)
 
     row = resp.payload
     expected = b"oauth:" + username.encode("utf-8")
