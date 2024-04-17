@@ -282,6 +282,45 @@ _payload_map = {
 }
 
 
+def add_type(enum: EnumNamedByte, struct: Construct):
+    """
+    Registers a custom message type. Tests may use this to extend the network
+    protocol.
+    """
+    assert enum not in _payload_map
+
+    types.namemapping[enum._name] = enum
+    types.decmapping[enum._val] = enum
+    _payload_map[enum] = struct
+
+
+@contextlib.contextmanager
+def replace_type(enum: EnumNamedByte, struct: Construct):
+    """
+    Temporarily replaces an existing message type with a custom struct for the
+    duration of the context manager. Useful when a protocol extension changes
+    the semantics of existing message types.
+    """
+    assert enum in _payload_map
+
+    old = _payload_map[enum]
+    _payload_map[enum] = struct
+
+    yield
+
+    _payload_map[enum] = old
+
+
+def remove_type(enum: EnumNamedByte):
+    """
+    Removes a custom message type added by add_type(). Tests should use this to
+    clean up their protocol extensions.
+    """
+    del _payload_map[enum]
+    del types.decmapping[enum._val]
+    del types.namemapping[enum._name]
+
+
 _payload = FocusedSeq(
     "_payload",
     "_payload"
