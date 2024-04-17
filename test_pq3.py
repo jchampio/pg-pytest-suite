@@ -217,6 +217,45 @@ def test_Startup_build(packet, expected_bytes):
             id="Query",
         ),
         pytest.param(
+            b"T\x00\x00\x00\x2E\x00\x02"
+            + b"a\x00\x00\x00\x00\x01\x00\x02\x00\x00\x00\x03\x00\x04\x00\x00\x00\x05\x00\x00"
+            + b"b\x00\x00\x00\x00\x05\x00\x04\x00\x00\x00\x03\x00\x02\x00\x00\x00\x01\x00\x01",
+            dict(
+                type=pq3.types.RowDescription,
+                len=46,
+                payload=dict(
+                    columns=[
+                        dict(
+                            name=b"a",
+                            relid=1,
+                            attnum=2,
+                            typid=3,
+                            typlen=4,
+                            atttypmod=5,
+                            fmt=pq3.formats.Text,
+                        ),
+                        dict(
+                            name=b"b",
+                            relid=5,
+                            attnum=4,
+                            typid=3,
+                            typlen=2,
+                            atttypmod=1,
+                            fmt=pq3.formats.Binary,
+                        ),
+                    ]
+                ),
+            ),
+            b"",
+            id="RowDescription",
+        ),
+        pytest.param(
+            b"T\x00\x00\x00\x06\x00\x00extra",
+            dict(type=pq3.types.RowDescription, len=6, payload=dict(columns=[])),
+            b"extra",
+            id="RowDescription with extra data",
+        ),
+        pytest.param(
             b"D\x00\x00\x00\x0B\x00\x01\x00\x00\x00\x01!",
             dict(type=pq3.types.DataRow, len=11, payload=dict(columns=[b"!"])),
             b"",
@@ -373,6 +412,11 @@ def test_Pq3_parse(raw, expected, extra):
             dict(type=pq3.types.Query, payload=dict(query=b"SELECT 1;")),
             b"Q\x00\x00\x00\x0eSELECT 1;\x00",
             id="implied len/type for Query",
+        ),
+        pytest.param(
+            dict(type=pq3.types.RowDescription, payload=dict(columns=[])),
+            b"T\x00\x00\x00\x06\x00\x00",
+            id="implied len/type for RowDescription",
         ),
         pytest.param(
             dict(type=pq3.types.DataRow, payload=dict(columns=[b"abcd"])),

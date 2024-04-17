@@ -180,6 +180,7 @@ types = ByteEnum(
     BackendKeyData=b"K",
     CommandComplete=b"C",
     ParameterStatus=b"S",
+    RowDescription=b"T",
     DataRow=b"D",
     Terminate=b"X",
     NegotiateProtocolVersion=b"v",
@@ -234,6 +235,24 @@ SASLInitialResponse = Struct(
 )
 
 
+formats = Enum(
+    Int16ub,
+    Text=0,
+    Binary=1,
+)
+
+
+_column_desc = Struct(
+    "name" / NullTerminated(GreedyBytes),
+    "relid" / Int32sb,
+    "attnum" / Int16sb,
+    "typid" / Int32sb,
+    "typlen" / Int16sb,
+    "atttypmod" / Int32sb,
+    "fmt" / formats,
+)
+
+
 _column = FocusedSeq(
     "data",
     "len" / Default(Int32sb, lambda this: _data_len(this)),
@@ -252,6 +271,7 @@ _payload_map = {
     types.ParameterStatus: Struct(
         "name" / NullTerminated(GreedyBytes), "value" / NullTerminated(GreedyBytes)
     ),
+    types.RowDescription: Struct("columns" / PrefixedArray(Int16sb, _column_desc)),
     types.DataRow: Struct("columns" / Default(PrefixedArray(Int16sb, _column), b"")),
     types.Terminate: Terminated,
     types.NegotiateProtocolVersion: Struct(
