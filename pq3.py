@@ -133,30 +133,64 @@ class EnumNamedByte:
 
     def __eq__(self, other):
         if isinstance(other, EnumNamedByte):
-            other = other._val
-        if not isinstance(other, bytes):
-            return NotImplemented
+            return self._val == other._val and self._name == other._name
 
-        return self._val == other
+        if isinstance(other, bytes):
+            return self._val == other
+
+        return NotImplemented
 
     def __hash__(self):
         return hash(self._val)
+
+
+sender = Enum(
+    Byte,
+    Both=0,
+    Frontend=1,
+    Backend=2,
+)
 
 
 # Adapted from construct.core.Enum
 class ByteEnum(Adapter):
     def __init__(self, **mapping):
         super(ByteEnum, self).__init__(Byte)
-        self.namemapping = {k: EnumNamedByte(v, k) for k, v in mapping.items()}
-        self.decmapping = {v: EnumNamedByte(v, k) for k, v in mapping.items()}
+
+        self.namemapping = {}
+        self.decmapping = {}
+        self.decmapping_fe = {}
+
+        for name, val in mapping.items():
+            if type(val) == tuple:
+                byte, direction = val
+            else:
+                byte = val
+                direction = sender.Both
+
+            e = EnumNamedByte(byte, name)
+            self.namemapping[name] = e
+
+            # Frontend-only message types are stored separately, to override the
+            # mapping when is_client is set. Everything else goes into the main
+            # mapping dictionary.
+            if direction == sender.Frontend:
+                self.decmapping_fe[byte] = e
+            else:
+                self.decmapping[byte] = e
 
     def __getattr__(self, name):
         if name in self.namemapping:
-            return self.decmapping[self.namemapping[name]]
+            return self.namemapping[name]
         raise AttributeError
 
     def _decode(self, obj, context, path):
         b = bytes([obj])
+
+        # Frontend types take precedence if is_client==True.
+        if context._params.get("is_client") and b in self.decmapping_fe:
+            return self.decmapping_fe[b]
+
         try:
             return self.decmapping[b]
         except KeyError:
@@ -174,12 +208,13 @@ types = ByteEnum(
     ErrorResponse=b"E",
     ReadyForQuery=b"Z",
     Query=b"Q",
+    Sync=(b"S", sender.Frontend),
     EmptyQueryResponse=b"I",
     AuthnRequest=b"R",
     PasswordMessage=b"p",
     BackendKeyData=b"K",
     CommandComplete=b"C",
-    ParameterStatus=b"S",
+    ParameterStatus=(b"S", sender.Backend),
     RowDescription=b"T",
     DataRow=b"D",
     Terminate=b"X",
@@ -264,6 +299,7 @@ _payload_map = {
     types.ErrorResponse: Struct("fields" / StringList),
     types.ReadyForQuery: Struct("status" / Bytes(1)),
     types.Query: Struct("query" / NullTerminated(GreedyBytes)),
+    types.Sync: Terminated,
     types.EmptyQueryResponse: Terminated,
     types.AuthnRequest: Struct("type" / authn, "body" / Default(_authn_body, b"")),
     types.BackendKeyData: Struct("pid" / Int32ub, "key" / Hex(Int32ub)),
@@ -348,7 +384,11 @@ def _payload_len(this):
         # already serialized; just use the given length
         return len(payload)
 
-    data = _payload.build(payload, type=this.type)
+    contextkw = dict(type=this.type)
+    if "is_client" in this._params:
+        contextkw["is_client"] = this._params.is_client
+
+    data = _payload.build(payload, **contextkw)
     return len(data)
 
 
@@ -528,6 +568,15 @@ def wrap(socket, *, debug_stream=None):
         if debug_stream:
             conn = _DebugStream(conn, debug_stream)
 
+        # XXX It's helpful to know whether the connection is client- or
+        # server-side, because some message formats share an identifier byte and
+        # are differentiated solely by the direction they're traveling. An easy
+        # way to do this is to tape a new attribute to the connection.
+        #
+        # By default, assume server-side. This will be flipped to client-side if
+        # send_startup() is called for the connection.
+        conn._pq3_client_side = False
+
         try:
             yield conn
         finally:
@@ -542,12 +591,12 @@ def _send(stream, cls, obj):
     # Ideally we would build directly to the passed stream, but because we need
     # to reparse the generated output for the debugging case, build to an
     # intermediate BytesIO and send it instead.
-    cls.build_stream(obj, out)
+    cls.build_stream(obj, out, is_client=stream._pq3_client_side)
     buf = out.getvalue()
 
     stream.write(buf)
     if debugging:
-        pkt = cls.parse(buf)
+        pkt = cls.parse(buf, is_client=stream._pq3_client_side)
         stream.end_packet(pkt)
 
     stream.flush()
@@ -588,6 +637,7 @@ def send_startup(stream, proto=None, **kwargs):
     if kwargs:
         pkt["payload"] = kwargs
 
+    stream._pq3_client_side = True  # adjust message types appropriately
     _send(stream, Startup, pkt)
 
 
@@ -595,7 +645,7 @@ def recv1(stream, *, cls=Pq3):
     """
     Receives a single pq3 packet from the given stream and returns it.
     """
-    resp = cls.parse_stream(stream)
+    resp = cls.parse_stream(stream, is_client=not stream._pq3_client_side)
 
     debugging = hasattr(stream, "flush_debug")
     if debugging:
@@ -652,6 +702,15 @@ class _TLSStream(object):
         self._in = ssl.MemoryBIO()
         self._out = ssl.MemoryBIO()
         self._ssl = context.wrap_bio(self._in, self._out, server_side, server_hostname)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+    def __setattr__(self, name, value):
+        if name in ("_stream", "_debugging", "_in", "_out", "_ssl"):
+            return object.__setattr__(self, name, value)
+
+        setattr(self._stream, name, value)
 
     def handshake(self):
         try:

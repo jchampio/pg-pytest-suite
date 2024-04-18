@@ -600,6 +600,46 @@ def test_SASLInitialResponse_build(fields, expected):
 
 
 @pytest.mark.parametrize(
+    "client, server",
+    [
+        pytest.param(
+            dict(
+                msg_type=pq3.types.Sync,
+                built=b"S\x00\x00\x00\x04",
+                payload=None,
+            ),
+            dict(
+                msg_type=pq3.types.ParameterStatus,
+                built=b"S\x00\x00\x00\x08a\x00b\x00",
+                payload=dict(name=b"a", value=b"b"),
+            ),
+            id="'S' Sync/ParameterStatus",
+        ),
+    ],
+)
+def test_frontend_backend_type_pairs(client, server):
+    """
+    For messages that share a type byte (and are differentiated only by whether
+    they're sent from the client or the server), make sure they survive a
+    parse/build round trip.
+    """
+    assert (
+        int(client["msg_type"])
+        == int(server["msg_type"])
+        == client["built"][0]
+        == server["built"][0]
+    ), "message pair must use the same message type byte"
+
+    for testcase, is_client in zip((client, server), (True, False)):
+        actual = pq3.Pq3.parse(testcase["built"], is_client=is_client)
+        assert actual.type == testcase["msg_type"]
+        assert actual.payload == testcase["payload"]
+
+        actual = pq3.Pq3.build(actual, is_client=is_client)
+        assert actual == testcase["built"]
+
+
+@pytest.mark.parametrize(
     "version,expected_bytes",
     [
         pytest.param((3, 0), b"\x00\x03\x00\x00", id="version 3"),
