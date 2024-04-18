@@ -449,6 +449,11 @@ def test_Pq3_parse(raw, expected, extra):
             id="implied len/type/name for Describe",
         ),
         pytest.param(
+            dict(type=pq3.types.Execute, payload=dict()),
+            b"E\x00\x00\x00\x09\x00\x00\x00\x00\x00",
+            id="implied parameters for empty Execute",
+        ),
+        pytest.param(
             dict(type=pq3.types.RowDescription, payload=dict(columns=[])),
             b"T\x00\x00\x00\x06\x00\x00",
             id="implied len/type for RowDescription",
@@ -740,6 +745,19 @@ def test_SASLInitialResponse_build(fields, expected):
                 payload=dict(columns=[]),
             ),
             id="'D' Describe/DataRow",
+        ),
+        pytest.param(
+            dict(
+                msg_type=pq3.types.Execute,
+                built=b"E\x00\x00\x00\x0Ap\x00\x00\x00 \x00",
+                payload=dict(portal=b"p", maxrows=0x2000),
+            ),
+            dict(
+                msg_type=pq3.types.ErrorResponse,
+                built=b"E\x00\x00\x00\x0Ap\x00\x00\x00 \x00",
+                payload=dict(fields=[b"p", b"", b"", b" "]),
+            ),
+            id="'E' Execute/ErrorResponse",
         ),
     ],
 )

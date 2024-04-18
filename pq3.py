@@ -206,12 +206,13 @@ class ByteEnum(Adapter):
 
 
 types = ByteEnum(
-    ErrorResponse=b"E",
+    ErrorResponse=(b"E", sender.Backend),
     ReadyForQuery=b"Z",
     Query=b"Q",
     Parse=b"P",
     Bind=b"B",
     Describe=(b"D", sender.Frontend),
+    Execute=(b"E", sender.Frontend),
     Sync=(b"S", sender.Frontend),
     EmptyQueryResponse=b"I",
     AuthnRequest=b"R",
@@ -322,6 +323,10 @@ _payload_map = {
         "resfmts" / Default(PrefixedArray(Int16ub, formats), []),
     ),
     types.Describe: Struct("variant" / describe, "name" / Default(String, b"")),
+    types.Execute: Struct(
+        "portal" / Default(String, b""),
+        "maxrows" / Default(Int32ub, 0),
+    ),
     types.Sync: Terminated,
     types.EmptyQueryResponse: Terminated,
     types.AuthnRequest: Struct("type" / authn, "body" / Default(_authn_body, b"")),
