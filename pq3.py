@@ -27,7 +27,8 @@ def protocol(major, minor):
 
 # Startup
 
-StringList = GreedyRange(NullTerminated(GreedyBytes))
+String = NullTerminated(GreedyBytes)
+StringList = GreedyRange(String)
 
 
 class KeyValueAdapter(Adapter):
@@ -208,6 +209,7 @@ types = ByteEnum(
     ErrorResponse=b"E",
     ReadyForQuery=b"Z",
     Query=b"Q",
+    Parse=b"P",
     Sync=(b"S", sender.Frontend),
     EmptyQueryResponse=b"I",
     AuthnRequest=b"R",
@@ -255,7 +257,7 @@ def _data_len(this):
 # state for the entire stream. So this is a separate Construct that can be
 # explicitly parsed/built by code that knows it's needed.
 SASLInitialResponse = Struct(
-    "name" / NullTerminated(GreedyBytes),
+    "name" / String,
     "len" / Default(Int32sb, lambda this: _data_len(this)),
     "data"
     / IfThenElse(
@@ -278,7 +280,7 @@ formats = Enum(
 
 
 _column_desc = Struct(
-    "name" / NullTerminated(GreedyBytes),
+    "name" / String,
     "relid" / Int32sb,
     "attnum" / Int16sb,
     "typid" / Int32sb,
@@ -298,22 +300,24 @@ _column = FocusedSeq(
 _payload_map = {
     types.ErrorResponse: Struct("fields" / StringList),
     types.ReadyForQuery: Struct("status" / Bytes(1)),
-    types.Query: Struct("query" / NullTerminated(GreedyBytes)),
+    types.Query: Struct("query" / String),
+    types.Parse: Struct(
+        "dest" / Default(String, b""),
+        "query" / String,
+        "typids" / Default(PrefixedArray(Int16sb, Int32sb), b""),
+    ),
     types.Sync: Terminated,
     types.EmptyQueryResponse: Terminated,
     types.AuthnRequest: Struct("type" / authn, "body" / Default(_authn_body, b"")),
     types.BackendKeyData: Struct("pid" / Int32ub, "key" / Hex(Int32ub)),
-    types.CommandComplete: Struct("tag" / NullTerminated(GreedyBytes)),
-    types.ParameterStatus: Struct(
-        "name" / NullTerminated(GreedyBytes), "value" / NullTerminated(GreedyBytes)
-    ),
+    types.CommandComplete: Struct("tag" / String),
+    types.ParameterStatus: Struct("name" / String, "value" / String),
     types.RowDescription: Struct("columns" / PrefixedArray(Int16sb, _column_desc)),
     types.DataRow: Struct("columns" / Default(PrefixedArray(Int16sb, _column), b"")),
     types.Terminate: Terminated,
     types.NegotiateProtocolVersion: Struct(
         "version" / Hex(Int32ub),
-        "unsupported"
-        / Default(PrefixedArray(Int32ub, NullTerminated(GreedyBytes)), b""),
+        "unsupported" / Default(PrefixedArray(Int32ub, String), b""),
     ),
 }
 

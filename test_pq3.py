@@ -217,6 +217,26 @@ def test_Startup_build(packet, expected_bytes):
             id="Query",
         ),
         pytest.param(
+            b"P\x00\x00\x00\x18ddd\x00SELECT 1;\x00\x00\x01\x00\x00\x00\x02",
+            dict(
+                type=pq3.types.Parse,
+                len=24,
+                payload=dict(dest=b"ddd", query=b"SELECT 1;", typids=[2]),
+            ),
+            b"",
+            id="Parse",
+        ),
+        pytest.param(
+            b"P\x00\x00\x00\x18ddd\x00SELECT 1;\x00\x00\x01\x00\x00\x00\x02\xAA\xBB\xCC\xDD",
+            dict(
+                type=pq3.types.Parse,
+                len=24,
+                payload=dict(dest=b"ddd", query=b"SELECT 1;", typids=[2]),
+            ),
+            b"\xAA\xBB\xCC\xDD",
+            id="Parse with extra data",
+        ),
+        pytest.param(
             b"T\x00\x00\x00\x2E\x00\x02"
             + b"a\x00\x00\x00\x00\x01\x00\x02\x00\x00\x00\x03\x00\x04\x00\x00\x00\x05\x00\x00"
             + b"b\x00\x00\x00\x00\x05\x00\x04\x00\x00\x00\x03\x00\x02\x00\x00\x00\x01\x00\x01",
@@ -412,6 +432,11 @@ def test_Pq3_parse(raw, expected, extra):
             dict(type=pq3.types.Query, payload=dict(query=b"SELECT 1;")),
             b"Q\x00\x00\x00\x0eSELECT 1;\x00",
             id="implied len/type for Query",
+        ),
+        pytest.param(
+            dict(type=pq3.types.Parse, payload=dict(query=b"SELECT 1;")),
+            b"P\x00\x00\x00\x11\x00SELECT 1;\x00\x00\x00",
+            id="implied len/type/dest/numtypes for Parse",
         ),
         pytest.param(
             dict(type=pq3.types.RowDescription, payload=dict(columns=[])),
