@@ -444,6 +444,11 @@ def test_Pq3_parse(raw, expected, extra):
             id="implied parameters for empty Bind",
         ),
         pytest.param(
+            dict(type=pq3.types.Describe, payload=dict(variant=pq3.describe.Portal)),
+            b"D\x00\x00\x00\x06P\x00",
+            id="implied len/type/name for Describe",
+        ),
+        pytest.param(
             dict(type=pq3.types.RowDescription, payload=dict(columns=[])),
             b"T\x00\x00\x00\x06\x00\x00",
             id="implied len/type for RowDescription",
@@ -722,6 +727,19 @@ def test_SASLInitialResponse_build(fields, expected):
                 payload=dict(name=b"a", value=b"b"),
             ),
             id="'S' Sync/ParameterStatus",
+        ),
+        pytest.param(
+            dict(
+                msg_type=pq3.types.Describe,
+                built=b"D\x00\x00\x00\x06S\x00",
+                payload=dict(variant=pq3.describe.Statement, name=b""),
+            ),
+            dict(
+                msg_type=pq3.types.DataRow,
+                built=b"D\x00\x00\x00\x06\x00\x00",
+                payload=dict(columns=[]),
+            ),
+            id="'D' Describe/DataRow",
         ),
     ],
 )

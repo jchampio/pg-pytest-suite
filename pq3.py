@@ -211,6 +211,7 @@ types = ByteEnum(
     Query=b"Q",
     Parse=b"P",
     Bind=b"B",
+    Describe=(b"D", sender.Frontend),
     Sync=(b"S", sender.Frontend),
     EmptyQueryResponse=b"I",
     AuthnRequest=b"R",
@@ -219,7 +220,7 @@ types = ByteEnum(
     CommandComplete=b"C",
     ParameterStatus=(b"S", sender.Backend),
     RowDescription=b"T",
-    DataRow=b"D",
+    DataRow=(b"D", sender.Backend),
     Terminate=b"X",
     NegotiateProtocolVersion=b"v",
 )
@@ -298,6 +299,12 @@ _column = FocusedSeq(
 )
 
 
+describe = ByteEnum(
+    Portal=b"P",
+    Statement=b"S",
+)
+
+
 _payload_map = {
     types.ErrorResponse: Struct("fields" / StringList),
     types.ReadyForQuery: Struct("status" / Bytes(1)),
@@ -314,6 +321,7 @@ _payload_map = {
         "params" / Default(PrefixedArray(Int16ub, _column), []),
         "resfmts" / Default(PrefixedArray(Int16ub, formats), []),
     ),
+    types.Describe: Struct("variant" / describe, "name" / Default(String, b"")),
     types.Sync: Terminated,
     types.EmptyQueryResponse: Terminated,
     types.AuthnRequest: Struct("type" / authn, "body" / Default(_authn_body, b"")),
