@@ -439,6 +439,11 @@ def test_Pq3_parse(raw, expected, extra):
             id="implied len/type/dest/numtypes for Parse",
         ),
         pytest.param(
+            dict(type=pq3.types.Bind, payload=dict()),
+            b"B\x00\x00\x00\x0C\x00\x00\x00\x00\x00\x00\x00\x00",
+            id="implied parameters for empty Bind",
+        ),
+        pytest.param(
             dict(type=pq3.types.RowDescription, payload=dict(columns=[])),
             b"T\x00\x00\x00\x06\x00\x00",
             id="implied len/type for RowDescription",
@@ -542,6 +547,84 @@ def test_DataRow_build(fields, expected):
     actual = pq3.Pq3.build(dict(type=pq3.types.DataRow, payload=fields))
 
     expected = b"D" + struct.pack("!i", len(expected) + 4) + expected
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        pytest.param(
+            b"\x00\x00\x00\x00\x00\x00\x00\x00",
+            dict(portal=b"", stmt=b"", fmts=[], params=[], resfmts=[]),
+            id="all empty",
+        ),
+        pytest.param(
+            b"p\x00s\x00\x00\x02\x00\x00\x00\x01\x00\x02\xFF\xFF\xFF\xFF\x00\x00\x00\x03123\x00\x01\x00\x01",
+            dict(
+                portal=b"p",
+                stmt=b"s",
+                fmts=[pq3.formats.Text, pq3.formats.Binary],
+                params=[None, b"123"],
+                resfmts=[pq3.formats.Binary],
+            ),
+            id="all full",
+        ),
+    ],
+)
+def test_Bind_parse(raw, expected):
+    pkt = b"B" + struct.pack("!i", len(raw) + 4) + raw
+    with io.BytesIO(pkt) as stream:
+        actual = pq3.Pq3.parse_stream(stream)
+
+        assert actual.type == pq3.types.Bind
+        assert actual.payload == expected
+        assert not stream.read()
+
+
+@pytest.mark.parametrize(
+    "fields,expected",
+    [
+        pytest.param(
+            dict(),
+            b"\x00\x00\x00\x00\x00\x00\x00\x00",
+            id="all empty",
+        ),
+        pytest.param(
+            dict(portal=b"p"),
+            b"p\x00\x00\x00\x00\x00\x00\x00\x00",
+            id="only portal",
+        ),
+        pytest.param(
+            dict(stmt=b"s"),
+            b"\x00s\x00\x00\x00\x00\x00\x00\x00",
+            id="only statement",
+        ),
+        pytest.param(
+            dict(fmts=[pq3.formats.Binary]),
+            b"\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00",
+            id="only parameter formats",
+        ),
+        pytest.param(
+            dict(params=[None, None]),
+            b"\x00\x00\x00\x00\x00\x02\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00\x00",
+            id="only NULL parameter values",
+        ),
+        pytest.param(
+            dict(params=[b"123", b"abc"]),
+            b"\x00\x00\x00\x00\x00\x02\x00\x00\x00\x03123\x00\x00\x00\x03abc\x00\x00",
+            id="other parameter values",
+        ),
+        pytest.param(
+            dict(resfmts=[pq3.formats.Text, pq3.formats.Binary]),
+            b"\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x01",
+            id="only result formats",
+        ),
+    ],
+)
+def test_Bind_build(fields, expected):
+    actual = pq3.Pq3.build(dict(type=pq3.types.Bind, payload=fields))
+
+    expected = b"B" + struct.pack("!i", len(expected) + 4) + expected
     assert actual == expected
 
 
