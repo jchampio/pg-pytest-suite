@@ -47,8 +47,16 @@ class ClientHandshake(threading.Thread):
         self.exception = None
 
     def run(self):
+        # Make sure the length of our hostaddr list matches the length of the
+        # supplied host list.
+        num_hosts = 1
+        if "host" in self._kwargs:
+            num_hosts = len(self._kwargs["host"].split(","))
+
+        hostaddr = ",".join(["127.0.0.1"] * num_hosts)
+
         try:
-            conn = psycopg2.connect(hostaddr="127.0.0.1", **self._kwargs)
+            conn = psycopg2.connect(hostaddr=hostaddr, **self._kwargs)
             self._pump_async(conn)
             conn.close()
         except Exception as e:
