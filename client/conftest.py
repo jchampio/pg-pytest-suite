@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: PostgreSQL
 #
 
+import contextlib
 import ctypes
 import os
 import socket
@@ -57,8 +58,8 @@ class ClientHandshake(threading.Thread):
 
         try:
             conn = psycopg2.connect(hostaddr=hostaddr, **self._kwargs)
-            self._pump_async(conn)
-            conn.close()
+            with contextlib.closing(conn):
+                self._pump_async(conn)
         except Exception as e:
             self.exception = e
 
