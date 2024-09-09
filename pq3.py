@@ -720,13 +720,18 @@ class _TLSStream(object):
     control over the TLS layer.
     """
 
-    def __init__(self, stream, context, server_side=False, server_hostname=None):
+    def __init__(
+        self, stream, context, server_side=False, server_hostname=None, session=None
+    ):
         self._stream = stream
         self._debugging = hasattr(stream, "flush_debug")
 
         self._in = ssl.MemoryBIO()
         self._out = ssl.MemoryBIO()
         self._ssl = context.wrap_bio(self._in, self._out, server_side, server_hostname)
+
+        if session is not None:
+            self._ssl.session = session
 
     def __getattr__(self, name):
         return getattr(self._stream, name)
@@ -736,6 +741,9 @@ class _TLSStream(object):
             return object.__setattr__(self, name, value)
 
         setattr(self._stream, name, value)
+
+    def ssl_socket(self):
+        return self._ssl
 
     def handshake(self):
         try:

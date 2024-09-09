@@ -24,6 +24,7 @@ def ssl_ctx(postgres_instance, certpair):
         "ssl": "on",
         "ssl_cert_file": os.path.abspath(certpair[0]),
         "ssl_key_file": os.path.abspath(certpair[1]),
+        "ssl_ca_file": os.path.abspath(certpair[0]),
     }
 
     with contextlib.closing(conn):
@@ -68,6 +69,38 @@ def test_tls(ssl_ctx, connect):
         pq3.send(tls, pq3.types.Query, query=b"")
         resp = pq3.recv1(tls)
         assert resp.type == pq3.types.EmptyQueryResponse
+
+
+@pytest.mark.parametrize(
+    "max_version",
+    (ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3),
+)
+def test_tls_no_resumption(ssl_ctx, connect, max_version):
+    """Make sure the server isn't sending session tickets."""
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ssl_ctx.ca)
+    ctx.maximum_version = max_version
+
+    session = None
+    given_ticket = False
+
+    for _ in (1, 2):
+        conn = connect()
+
+        with pq3.tls_handshake(
+            conn, ctx, server_hostname="example.org", session=session
+        ) as tls:
+            pq3.handshake(tls, user=pq3.pguser(), database=pq3.pgdatabase())
+
+            session = tls.ssl_socket().session
+            given_ticket = given_ticket or session.has_ticket
+
+            pq3.send(tls, pq3.types.Query, query=b"")
+            resp = pq3.recv1(tls)
+            assert resp.type == pq3.types.EmptyQueryResponse
+
+        conn.close()
+
+    assert not given_ticket
 
 
 @pytest.fixture(scope="session")
