@@ -113,14 +113,9 @@ def require_direct_ssl_support(postgres_instance):
     conn = psycopg2.connect(host=host, port=port)
 
     with contextlib.closing(conn):
-        c = conn.cursor()
-
-        c.execute(
-            "SELECT name FROM pg_settings WHERE name = %s",
-            ("ssl_enable_alpn",),
-        )
-        if c.fetchone() == None:
-            pytest.skip("server does not support ssl_enable_alpn")
+        major = conn.server_version // 10000
+        if major < 17:
+            pytest.skip("server does not support direct SSL connections")
 
 
 @pytest.mark.parametrize(

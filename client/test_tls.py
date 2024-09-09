@@ -64,7 +64,7 @@ def require_libpq_option(opt):
         pytest.skip(f"libpq must support {opt}")
 
 
-ALPN_PROTO = "TBD-pgsql"  # our ALPN protocol identifier
+ALPN_PROTO = "postgresql"  # our ALPN protocol identifier
 
 
 def test_negotiated_ssl(accept, certpair):
@@ -91,13 +91,13 @@ def test_negotiated_ssl(accept, certpair):
 
 def test_direct_ssl(accept, certpair):
     """
-    Happy path for sslnegotiation=requiredirect.
+    Happy path for sslnegotiation=direct.
     """
     require_libpq_option("sslnegotiation")
 
     sock, client = accept(
         host="example.org",
-        sslnegotiation="requiredirect",
+        sslnegotiation="direct",
         sslmode="verify-full",
         sslrootcert=certpair[0],
     )
@@ -128,7 +128,7 @@ def test_direct_ssl_without_alpn(accept, certpair):
 
     sock, client = accept(
         host="example.org",
-        sslnegotiation="requiredirect",
+        sslnegotiation="direct",
         sslmode="verify-full",
         sslrootcert=certpair[0],
     )
@@ -147,19 +147,12 @@ def test_direct_ssl_without_alpn(accept, certpair):
             # The client shouldn't send anything more.
             assert not tls.read(), "client sent unexpected data"
 
-    # TODO: decide on the actual error message
-    with pytest.raises(psycopg2.OperationalError, match="TODO"):
+    expected = "SSL connection was established without ALPN"
+    with pytest.raises(psycopg2.OperationalError, match=expected):
         client.check_completed()
 
 
-@pytest.mark.parametrize(
-    "mode, reconnect",
-    [
-        ("direct", True),
-        ("requiredirect", False),
-    ],
-)
-def test_direct_ssl_failed_negotiation(accept, certpair, mode, reconnect):
+def test_direct_ssl_failed_negotiation(accept, certpair):
     """
     Test that the client displays a useful message when attempting direct SSL
     with a server that doesn't support it.
@@ -168,7 +161,7 @@ def test_direct_ssl_failed_negotiation(accept, certpair, mode, reconnect):
 
     sock, client = accept(
         host="example.org",
-        sslnegotiation=mode,
+        sslnegotiation="direct",
         sslmode="verify-full",
         sslrootcert=certpair[0],
     )
@@ -180,20 +173,7 @@ def test_direct_ssl_failed_negotiation(accept, certpair, mode, reconnect):
 
             # ...then drop the connection.
 
-    if reconnect:
-        # The client should reconnect with the old-style SSL handshake.
-        sock, _ = accept()
-
-        with sock:
-            with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
-                startup = pq3.recv1(conn, cls=pq3.Startup)
-                assert startup.proto == pq3.protocol(1234, 5679)
-
-                # Reject this one too.
-                conn.write(b"N")
-
-    # TODO: decide on the actual error message
-    with pytest.raises(psycopg2.OperationalError, match="TODO"):
+    with pytest.raises(psycopg2.OperationalError, match="EOF detected"):
         client.check_completed()
 
 

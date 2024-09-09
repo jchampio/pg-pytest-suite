@@ -53,6 +53,7 @@ AlertDescription = Enum(
     user_canceled=90,
     no_renegotiation=100,
     unsupported_extension=110,
+    no_application_protocol=120,
 )
 
 Alert = Struct(
