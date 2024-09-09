@@ -779,15 +779,18 @@ class _TLSStream(object):
             innerlen = len(record.fragment)
             inner = io.BytesIO(record.fragment)
 
-            while inner.tell() < innerlen:
-                msg = record_cls.parse_stream(inner)
+            try:
+                while inner.tell() < innerlen:
+                    msg = record_cls.parse_stream(inner)
 
-                indented = "[Message] " + str(msg)
-                indented = textwrap.indent(indented, "    ")
+                    indented = "[Message] " + str(msg)
+                    indented = textwrap.indent(indented, "    ")
 
-                ret.write("\n")
-                ret.write(indented)
-                ret.write("\n")
+                    ret.write("\n")
+                    ret.write(indented)
+                    ret.write("\n")
+            except StreamError:
+                continue
 
         return ret.getvalue()
 
