@@ -35,12 +35,18 @@ def server_socket(unused_tcp_port_factory):
 
 class ClientHandshake(threading.Thread):
     """
-    A thread that connects to a local Postgres server using psycopg2. Once the
-    opening handshake completes, the connection will be immediately closed.
+    A thread that connects to a local Postgres server using psycopg2. By
+    default, once the opening handshake completes, the connection will be
+    immediately closed. A _client_cb may be passed in the kwargs to perform
+    custom actions after the handshake.
     """
 
     def __init__(self, *, port, **kwargs):
         super().__init__()
+
+        self.client_cb = kwargs.get("_client_cb")
+        if self.client_cb:
+            del kwargs["_client_cb"]
 
         kwargs["port"] = port
         self._kwargs = kwargs
@@ -60,6 +66,11 @@ class ClientHandshake(threading.Thread):
             conn = psycopg2.connect(hostaddr=hostaddr, **self._kwargs)
             with contextlib.closing(conn):
                 self._pump_async(conn)
+
+                # Optionally call back into the test.
+                if self.client_cb:
+                    self.client_cb(conn)
+
         except Exception as e:
             self.exception = e
 
