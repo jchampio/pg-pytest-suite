@@ -720,6 +720,9 @@ class _TLSStream(object):
     control over the TLS layer.
     """
 
+    _SEND_DIR = True
+    _RECV_DIR = False
+
     def __init__(
         self, stream, context, server_side=False, server_hostname=None, session=None
     ):
@@ -729,6 +732,13 @@ class _TLSStream(object):
         self._in = ssl.MemoryBIO()
         self._out = ssl.MemoryBIO()
         self._ssl = context.wrap_bio(self._in, self._out, server_side, server_hostname)
+
+        # Once we see a change_cipher_spec message, these will be set to true
+        # and we'll stop trying to parse the record stream.
+        self._ciphered = {
+            self._SEND_DIR: False,
+            self._RECV_DIR: False,
+        }
 
         if session is not None:
             self._ssl.session = session
@@ -757,7 +767,7 @@ class _TLSStream(object):
     def write(self, *args):
         return self._pump(lambda: self._ssl.write(*args))
 
-    def _decode(self, buf):
+    def _decode(self, buf, direction):
         """
         Attempts to decode a buffer of TLS data into a packet representation
         that can be printed.
@@ -779,8 +789,15 @@ class _TLSStream(object):
             ret.write(str(record))
             ret.write("\n")
 
+            if self._ciphered[direction]:
+                continue  # TODO: can't decrypt yet
+            elif record.type == tls.ContentType.change_cipher_spec:
+                self._ciphered[direction] = True
+
             if record.type == tls.ContentType.handshake:
                 record_cls = tls.Handshake
+            elif record.type == tls.ContentType.alert:
+                record_cls = tls.Alert
             else:
                 continue
 
@@ -811,7 +828,7 @@ class _TLSStream(object):
         self._stream.write(buf)
 
         if self._debugging:
-            pkt = self._decode(buf)
+            pkt = self._decode(buf, self._SEND_DIR)
             self._stream.end_packet(pkt, prefix="  ")
 
         self._stream.flush()
@@ -839,7 +856,7 @@ class _TLSStream(object):
         if not self._debugging:
             return
 
-        pkt = self._decode(buf)
+        pkt = self._decode(buf, self._RECV_DIR)
         self._stream.end_packet(pkt, read=True, prefix="  ")
 
     def _read_write(self, want):
