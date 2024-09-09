@@ -67,6 +67,28 @@ def require_libpq_option(opt):
 ALPN_PROTO = "TBD-pgsql"  # our ALPN protocol identifier
 
 
+def test_negotiated_ssl(accept, certpair):
+    """
+    Happy path for standard negotiated TLS.
+    """
+    sock, client = accept(
+        host="example.org",
+        sslmode="verify-full",
+        sslrootcert=certpair[0],
+    )
+    with sock:
+        with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
+            ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ctx.load_cert_chain(*certpair)
+            ctx.set_alpn_protocols([ALPN_PROTO])
+
+            with pq3.tls_handshake(conn, ctx, server_side=True) as tls:
+                startup = pq3.recv1(tls, cls=pq3.Startup)
+                assert startup.proto == pq3.protocol(3, 0)
+
+                finish_handshake(tls)
+
+
 def test_direct_ssl(accept, certpair):
     """
     Happy path for sslnegotiation=requiredirect.

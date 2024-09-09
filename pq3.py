@@ -852,7 +852,7 @@ class _TLSStream(object):
 
 
 @contextlib.contextmanager
-def tls_handshake(stream, context, *, server_hostname=None):
+def tls_handshake(stream, context, *, server_side=False, **kwargs):
     """
     Performs a TLS handshake over the given stream (which must have been created
     via a call to wrap()), and returns a new stream which transparently tunnels
@@ -862,21 +862,40 @@ def tls_handshake(stream, context, *, server_hostname=None):
     have debugging, using the same output IO.
     """
     debugging = hasattr(stream, "flush_debug")
+    SSLRequest = protocol(1234, 5679)
 
-    # Send our startup parameters.
-    send_startup(stream, proto=protocol(1234, 5679))
+    if server_side:
+        startup = recv1(stream, cls=Startup)
+        if startup.proto != SSLRequest:
+            raise RuntimeError("client did not issue an SSLRequest")
 
-    # Look at the SSL response.
-    resp = stream.read(1)
-    if debugging:
-        stream.flush_debug(prefix="  ")
+        # Accept the request.
+        stream.write(b"S")
+        if debugging:
+            stream.flush_debug(prefix="  ")
 
-    if resp == b"N":
-        raise RuntimeError("server does not support SSLRequest")
-    if resp != b"S":
-        raise RuntimeError(f"unexpected response of type {resp!r} during TLS startup")
+    else:
+        # Client side. Send our startup parameters.
+        send_startup(stream, proto=SSLRequest)
 
-    tls = _TLSStream(stream, context, server_hostname=server_hostname)
+        # Look at the SSL response.
+        resp = stream.read(1)
+        if debugging:
+            stream.flush_debug(prefix="  ")
+
+        if resp == b"N":
+            raise RuntimeError("server does not support SSLRequest")
+        if resp != b"S":
+            raise RuntimeError(
+                f"unexpected response of type {resp!r} during TLS startup"
+            )
+
+    tls = _TLSStream(
+        stream,
+        context,
+        server_side=server_side,
+        **kwargs,
+    )
     tls.handshake()
 
     if debugging:
