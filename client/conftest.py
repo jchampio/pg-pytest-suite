@@ -132,6 +132,7 @@ def accept(server_socket):
                 self.client.start()
 
             sock, _ = server_socket.accept()
+            sock.settimeout(BLOCKING_TIMEOUT)
             return sock, self.client
 
         def reset(self):
