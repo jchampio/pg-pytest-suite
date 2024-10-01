@@ -17,45 +17,68 @@ def ssl_ctx(postgres_instance, certpair):
     TODO: consolidate with setup_validator over in test_oauth.py
     """
     host, port = postgres_instance
-    conn = psycopg2.connect(host=host, port=port)
-    conn.autocommit = True
 
-    settings = {
-        "ssl": "on",
-        "ssl_cert_file": os.path.abspath(certpair[0]),
-        "ssl_key_file": os.path.abspath(certpair[1]),
-        "ssl_ca_file": os.path.abspath(certpair[0]),
-    }
+    # An ExitStack helps keep track of cleanup.
+    with contextlib.ExitStack() as stack:
+        conn = psycopg2.connect(host=host, port=port)
 
-    with contextlib.closing(conn):
+        # Close the connection after everything else is done.
+        stack.enter_context(contextlib.closing(conn))
+
+        conn.autocommit = True
         c = conn.cursor()
-        prev = dict()
 
-        for guc, val in settings.items():
-            # Save the previous value.
-            c.execute(sql.SQL("SHOW {};").format(sql.Identifier(guc)))
-            prev[guc] = c.fetchone()[0]
-
-            c.execute(
-                sql.SQL("ALTER SYSTEM SET {} TO %s;").format(sql.Identifier(guc)),
-                (val,),
-            )
-
-        c.execute("SELECT pg_reload_conf();")
+        # Right before we close the connection, tell the server to reload its
+        # configuration. This picks up the GUC changes that happen when the
+        # stack is unwound.
+        stack.callback(c.execute, "SELECT pg_reload_conf();")
 
         class _SSLContext(object):
             ca = certpair[0]
 
-        yield _SSLContext()
+            def set_gucs(self, **settings):
+                """
+                Sets arbitrary GUCs and reloads the server. These changes will
+                be undone at the end of the test.
+                """
+                if not settings:
+                    return
 
-        # Restore the previous values.
-        for guc, val in prev.items():
-            c.execute(
-                sql.SQL("ALTER SYSTEM SET {} TO %s;").format(sql.Identifier(guc)),
-                (val,),
-            )
+                for guc, val in settings.items():
+                    # Save the previous value.
+                    c.execute(sql.SQL("SHOW {};").format(sql.Identifier(guc)))
+                    prev = c.fetchone()[0]
 
-        c.execute("SELECT pg_reload_conf();")
+                    c.execute(
+                        sql.SQL("ALTER SYSTEM SET {} TO %s;").format(
+                            sql.Identifier(guc)
+                        ),
+                        (val,),
+                    )
+
+                    # When the stack unwinds, reset the GUC. (The reload will be
+                    # taken care of by the pushed call to pg_reload_conf(),
+                    # above.)
+                    stack.callback(
+                        c.execute,
+                        sql.SQL("ALTER SYSTEM SET {} TO %s;").format(
+                            sql.Identifier(guc)
+                        ),
+                        (prev,),
+                    )
+
+                # Reload to pick up all the settings we've modified.
+                c.execute("SELECT pg_reload_conf();")
+
+        ctx = _SSLContext()
+        ctx.set_gucs(
+            ssl="on",
+            ssl_cert_file=os.path.abspath(certpair[0]),
+            ssl_key_file=os.path.abspath(certpair[1]),
+            ssl_ca_file=os.path.abspath(certpair[0]),
+        )
+
+        yield ctx
 
 
 def test_tls(ssl_ctx, connect):
