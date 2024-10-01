@@ -190,3 +190,41 @@ def test_direct_ssl_without_alpn(ssl_ctx, connect, require_direct_ssl_support, p
 
     with pytest.raises(ssl.SSLError, match="no application protocol"):
         tls.handshake()
+
+
+@pytest.fixture(scope="session")
+def require_tls13_ciphers(postgres_instance):
+    """
+    Automatically skips a test if the server doesn't support setting TLS 1.3
+    ciphersuites.
+    """
+    host, port = postgres_instance
+    conn = psycopg2.connect(host=host, port=port)
+
+    with contextlib.closing(conn):
+        c = conn.cursor()
+
+        c.execute(
+            "SELECT name FROM pg_settings WHERE name = %s",
+            ("ssl_tls13_ciphers",),
+        )
+        if c.fetchone() == None:
+            pytest.skip("server does not support ssl_tls13_ciphers")
+
+
+@pytest.mark.parametrize(
+    "cipher", ("TLS_CHACHA20_POLY1305_SHA256", "TLS_AES_256_GCM_SHA384")
+)
+def test_setting_tls13_ciphers(require_tls13_ciphers, ssl_ctx, connect, cipher):
+    """
+    Tests that the server can be configured to use specific TLS 1.3
+    ciphersuites.
+    """
+    ssl_ctx.set_gucs(ssl_tls13_ciphers=cipher)
+    conn = connect()
+
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ssl_ctx.ca)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+
+    with pq3.tls_handshake(conn, ctx, server_hostname="example.org") as tls:
+        assert tls.ssl_socket().cipher() == (cipher, "TLSv1.3", 256)
