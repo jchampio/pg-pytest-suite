@@ -192,24 +192,28 @@ def test_direct_ssl_without_alpn(ssl_ctx, connect, require_direct_ssl_support, p
         tls.handshake()
 
 
+def _require_server_support(instance, guc):
+    """
+    Skips a test if the server doesn't have a GUC in its pg_settings.
+    """
+    host, port = instance
+    conn = psycopg2.connect(host=host, port=port)
+
+    with contextlib.closing(conn):
+        c = conn.cursor()
+
+        c.execute("SELECT name FROM pg_settings WHERE name = %s", (guc,))
+        if c.fetchone() == None:
+            pytest.skip("server does not support {}".format(guc))
+
+
 @pytest.fixture(scope="session")
 def require_tls13_ciphers(postgres_instance):
     """
     Automatically skips a test if the server doesn't support setting TLS 1.3
     ciphersuites.
     """
-    host, port = postgres_instance
-    conn = psycopg2.connect(host=host, port=port)
-
-    with contextlib.closing(conn):
-        c = conn.cursor()
-
-        c.execute(
-            "SELECT name FROM pg_settings WHERE name = %s",
-            ("ssl_tls13_ciphers",),
-        )
-        if c.fetchone() == None:
-            pytest.skip("server does not support ssl_tls13_ciphers")
+    _require_server_support(postgres_instance, "ssl_tls13_ciphers")
 
 
 @pytest.mark.parametrize(
@@ -228,3 +232,64 @@ def test_setting_tls13_ciphers(require_tls13_ciphers, ssl_ctx, connect, cipher):
 
     with pq3.tls_handshake(conn, ctx, server_hostname="example.org") as tls:
         assert tls.ssl_socket().cipher() == (cipher, "TLSv1.3", 256)
+
+
+@pytest.fixture(scope="session")
+def require_ssl_groups(postgres_instance):
+    """
+    Automatically skips a test if the server doesn't support setting multiple
+    DH groups and aliases.
+    """
+    _require_server_support(postgres_instance, "ssl_groups")
+
+
+@pytest.mark.parametrize(
+    "max_version",
+    (ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3),
+)
+@pytest.mark.parametrize(
+    "c_group, s_groups, succeeds",
+    [
+        pytest.param("prime256v1", "prime256v1", True, id="groups match"),
+        pytest.param("prime256v1", "x25519", False, id="groups mismatch"),
+        pytest.param("prime256v1", "P-256", True, id="group aliases match"),
+        pytest.param(
+            "prime256v1", "secp521r1:x25519", False, id="multiple groups mismatch"
+        ),
+        pytest.param("secp521r1", "x25519:secp521r1", True, id="multiple groups match"),
+        pytest.param("secp521r1", "x25519", False, id="non-ECDH groups mismatch"),
+    ],
+)
+def test_setting_dh_groups(
+    require_ssl_groups, ssl_ctx, connect, c_group, s_groups, succeeds, max_version
+):
+    """
+    Tests that the server can be configured to use specific DH groups. We can't
+    check the selected group settings from the Python side, so we rely on
+    negative tests to ensure that the connection fails when there's a mismatch.
+    """
+    ssl_ctx.set_gucs(ssl_groups=s_groups)
+    conn = connect()
+
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ssl_ctx.ca)
+    ctx.maximum_version = max_version
+    ctx.set_ecdh_curve(c_group)
+
+    # Behavior here is complex. We expect TLS 1.3 to fail the handshake.
+    # TLS 1.2, on the other hand, may fall back to non-EC key agreement.
+    errctx = contextlib.nullcontext()
+    if not succeeds and max_version == ssl.TLSVersion.TLSv1_3:
+        errctx = pytest.raises(ssl.SSLError, match="handshake failure")
+
+    with errctx:
+        with pq3.tls_handshake(conn, ctx, server_hostname="example.org") as tls:
+            cipher, version, _ = tls.ssl_socket().cipher()
+
+            if not succeeds:
+                # Check that key exchange fell back (see comment above).
+                assert "ECDHE" not in cipher
+                assert version == "TLSv1.2"
+            elif version == "TLSv1.2":
+                assert "ECDHE" in cipher
+
+            pq3.handshake(tls, user=pq3.pguser(), database=pq3.pgdatabase())
