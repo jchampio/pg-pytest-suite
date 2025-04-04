@@ -1,7 +1,7 @@
 #
 # Copyright 2021 VMware, Inc.
 # Portions Copyright 2023 Timescale, Inc.
-# Portions Copyright (c) 2024, PostgreSQL Global Development Group
+# Portions Copyright (c) 2024-2025, PostgreSQL Global Development Group
 # SPDX-License-Identifier: PostgreSQL
 #
 
@@ -10,6 +10,7 @@ import contextlib
 import json
 import os
 import pathlib
+import platform
 import secrets
 import shlex
 import shutil
@@ -19,6 +20,7 @@ from multiprocessing import shared_memory
 
 import psycopg2
 import pytest
+from construct import Container
 from psycopg2 import sql
 
 import pq3
@@ -38,7 +40,7 @@ MAX_UINT16 = 2**16 - 1
 @pytest.fixture(scope="session", autouse=True)
 def _check_oauth_support(postgres_instance):
     """
-    Automatically skips this test module if oauth_validator_library isn't
+    Automatically skips this test module if oauth_validator_libraries isn't
     supported by the server we're testing.
     """
     host, port = postgres_instance
@@ -49,21 +51,21 @@ def _check_oauth_support(postgres_instance):
 
         c.execute(
             "SELECT name FROM pg_settings WHERE name = %s",
-            ("oauth_validator_library",),
+            ("oauth_validator_libraries",),
         )
         if c.fetchone() == None:
-            pytest.skip("server does not support oauth_validator_library")
+            pytest.skip("server does not support oauth_validator_libraries")
 
 
 @contextlib.contextmanager
-def prepend_file(path, lines):
+def prepend_file(path, lines, *, suffix=".bak"):
     """
     A context manager that prepends a file on disk with the desired lines of
     text. When the context manager is exited, the file will be restored to its
     original contents.
     """
     # First make a backup of the original file.
-    bak = path + ".bak"
+    bak = path + suffix
     shutil.copy2(path, bak)
 
     try:
@@ -106,12 +108,17 @@ def oauth_ctx(postgres_instance):
         scope = "openid " + id
 
     ctx = Context()
-    hba_lines = (
+    hba_lines = [
         f'host {ctx.dbname} {ctx.map_user}   samehost oauth issuer="{ctx.issuer}" scope="{ctx.scope}" map=oauth\n',
-        f'host {ctx.dbname} {ctx.authz_user} samehost oauth issuer="{ctx.issuer}" scope="{ctx.scope}" trust_validator_authz=1\n',
+        f'host {ctx.dbname} {ctx.authz_user} samehost oauth issuer="{ctx.issuer}" scope="{ctx.scope}" delegate_ident_mapping=1\n',
         f'host {ctx.dbname} all              samehost oauth issuer="{ctx.issuer}" scope="{ctx.scope}"\n',
-    )
-    ident_lines = (r"oauth /^(.*)@example\.com$ \1",)
+    ]
+    ident_lines = [r"oauth /^(.*)@example\.com$ \1"]
+
+    if platform.system() == "Windows":
+        # XXX why is 'samehost' not behaving as expected on Windows?
+        for l in list(hba_lines):
+            hba_lines.append(l.replace("samehost", "::1/128"))
 
     host, port = postgres_instance
     conn = psycopg2.connect(host=host, port=port)
@@ -368,6 +375,12 @@ def test_oauth_bearer_corner_cases(setup_validator, connect, oauth_ctx, token_va
         ),
         pytest.param(
             lambda ctx: ctx.user,
+            lambda ctx: "",
+            False,
+            id="validator authn: fails when authn_id is empty",
+        ),
+        pytest.param(
+            lambda ctx: ctx.user,
             lambda ctx: ctx.authz_user,
             False,
             id="validator authn: fails when authn_id != username",
@@ -475,7 +488,7 @@ class ExpectedError(object):
         prefix = type.encode("ascii")
         fields = [f for f in resp.payload.fields if f.startswith(prefix)]
 
-        assert len(fields) == 1
+        assert len(fields) == 1, f"did not find exactly one {type} field"
         return fields[0][1:]  # strip off the type byte
 
     def match(self, resp):
@@ -520,6 +533,7 @@ def test_oauth_rejected_bearer(conn, oauth_ctx):
         b"Bearer trailingtab\t",
         b"Bearer me@example.com",
         b"Beare abcd",
+        b" Bearer leadingspace",
         b'OAuth realm="Example"',
         b"",
     ],
@@ -619,8 +633,15 @@ def test_oauth_bad_response_to_error_challenge(conn, oauth_ctx, resp_type, resp,
             id="error response in initial message",
         ),
         pytest.param(
-            pq3.types.PasswordMessage,
-            b"x" * (MAX_SASL_MESSAGE_LENGTH + 1),
+            None,
+            # Sending an actual 65k packet results in ECONNRESET on Windows, and
+            # it floods the tests' connection log uselessly, so just fake the
+            # length and send a smaller number of bytes.
+            dict(
+                type=pq3.types.PasswordMessage,
+                len=MAX_SASL_MESSAGE_LENGTH + 1,
+                payload=b"x" * 512,
+            ),
             ExpectedError(
                 INVALID_AUTHORIZATION_ERRCODE, "bearer authentication failed"
             ),
@@ -735,7 +756,7 @@ def test_oauth_bad_response_to_error_challenge(conn, oauth_ctx, resp_type, resp,
             ExpectedError(
                 PROTOCOL_VIOLATION_ERRCODE,
                 "malformed OAUTHBEARER message",
-                "Unexpected attribute 0x00",  # XXX this is a bit strange
+                'Unexpected attribute "0x00"',  # XXX this is a bit strange
             ),
             id="bad GS2 header: missing authzid terminator",
         ),
@@ -856,15 +877,68 @@ def test_oauth_bad_response_to_error_challenge(conn, oauth_ctx, resp_type, resp,
             ),
             id="multiple auth values",
         ),
+        pytest.param(
+            pq3.types.PasswordMessage,
+            pq3.SASLInitialResponse.build(
+                dict(
+                    name=b"OAUTHBEARER",
+                    data=b"y,,\x01=\x01\x01",
+                )
+            ),
+            ExpectedError(
+                PROTOCOL_VIOLATION_ERRCODE,
+                "malformed OAUTHBEARER message",
+                "empty key name",
+            ),
+            id="empty key",
+        ),
+        pytest.param(
+            pq3.types.PasswordMessage,
+            pq3.SASLInitialResponse.build(
+                dict(
+                    name=b"OAUTHBEARER",
+                    data=b"y,,\x01my key= \x01\x01",
+                )
+            ),
+            ExpectedError(
+                PROTOCOL_VIOLATION_ERRCODE,
+                "malformed OAUTHBEARER message",
+                "invalid key name",
+            ),
+            id="whitespace in key name",
+        ),
+        pytest.param(
+            pq3.types.PasswordMessage,
+            pq3.SASLInitialResponse.build(
+                dict(
+                    name=b"OAUTHBEARER",
+                    data=b"y,,\x01key=a\x05b\x01\x01",
+                )
+            ),
+            ExpectedError(
+                PROTOCOL_VIOLATION_ERRCODE,
+                "malformed OAUTHBEARER message",
+                "invalid value",
+            ),
+            id="junk in value",
+        ),
     ],
 )
 def test_oauth_bad_initial_response(conn, oauth_ctx, type, payload, err):
     begin_oauth_handshake(conn, oauth_ctx)
 
     # The server expects a SASL response; give it something else instead.
-    if not isinstance(payload, dict):
-        payload = dict(payload_data=payload)
-    pq3.send(conn, type, **payload)
+    if type is not None:
+        # Build a new packet of the desired type.
+        if not isinstance(payload, dict):
+            payload = dict(payload_data=payload)
+        pq3.send(conn, type, **payload)
+    else:
+        # The test has a custom packet to send. (The only reason to do this is
+        # if the packet is corrupt or otherwise unbuildable/unparsable, so we
+        # don't use the standard pq3.send().)
+        conn.write(pq3.Pq3.build(payload))
+        conn.end_packet(Container(payload))
 
     resp = pq3.recv1(conn)
     err.match(resp)
@@ -942,3 +1016,70 @@ def test_oauth_validator_role(setup_validator, oauth_ctx, connect, user):
     row = resp.payload
     expected = b"oauth:" + username.encode("utf-8")
     assert row.columns == [expected]
+
+
+@pytest.fixture
+def odd_oauth_ctx(postgres_instance, oauth_ctx):
+    """
+    Adds an HBA entry with messed up issuer/scope settings, to pin the server
+    behavior.
+
+    TODO: these should really be rejected in the HBA rather than passed through
+    by the server.
+    """
+    id = secrets.token_hex(4)
+
+    class Context:
+        user = oauth_ctx.user
+        dbname = oauth_ctx.dbname
+
+        # Both of these embedded double-quotes are invalid; they're prohibited
+        # in both URLs and OAuth scope identifiers.
+        issuer = oauth_ctx.issuer + '/"/'
+        scope = oauth_ctx.scope + ' quo"ted'
+
+    ctx = Context()
+    hba_issuer = ctx.issuer.replace('"', '""')
+    hba_scope = ctx.scope.replace('"', '""')
+    hba_lines = [
+        f'host {ctx.dbname} {ctx.user} samehost oauth issuer="{hba_issuer}" scope="{hba_scope}"\n',
+    ]
+
+    if platform.system() == "Windows":
+        # XXX why is 'samehost' not behaving as expected on Windows?
+        for l in list(hba_lines):
+            hba_lines.append(l.replace("samehost", "::1/128"))
+
+    host, port = postgres_instance
+    conn = psycopg2.connect(host=host, port=port)
+    conn.autocommit = True
+
+    with contextlib.closing(conn):
+        c = conn.cursor()
+
+        # Replace pg_hba. Note that it's already been replaced once by
+        # oauth_ctx, so use a different backup prefix in prepend_file().
+        c.execute("SHOW hba_file;")
+        hba = c.fetchone()[0]
+
+        with prepend_file(hba, hba_lines, suffix=".bak2"):
+            c.execute("SELECT pg_reload_conf();")
+
+            yield ctx
+
+        # Put things back the way they were.
+        c.execute("SELECT pg_reload_conf();")
+
+
+def test_odd_server_response(odd_oauth_ctx, connect):
+    """
+    Verifies that the server is correctly escaping the JSON in its failure
+    response.
+    """
+    conn = connect()
+    begin_oauth_handshake(conn, odd_oauth_ctx, user=odd_oauth_ctx.user)
+
+    # Send an empty auth initial response, which will force an authn failure.
+    send_initial_response(conn, auth=b"")
+
+    expect_handshake_failure(conn, odd_oauth_ctx)

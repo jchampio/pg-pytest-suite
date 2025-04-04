@@ -1,7 +1,7 @@
 #
 # Portions Copyright 2021 VMware, Inc.
 # Portions Copyright 2023 Timescale, Inc.
-# Portions Copyright (c) 2024, PostgreSQL Global Development Group
+# Portions Copyright (c) 2024-2025, PostgreSQL Global Development Group
 # SPDX-License-Identifier: PostgreSQL
 #
 
@@ -106,11 +106,11 @@ def postgres_instance(pytestconfig, unused_tcp_port_factory):
             "-c log_connections=on",
         ]
 
-        if _server_supports(datadir, "oauth_validator_library"):
+        if _server_supports(datadir, "oauth_validator_libraries"):
             options.extend(
                 [
-                    "-c shared_preload_libraries=oauthtest",
-                    "-c oauth_validator_library=oauthtest",
+                    "-c session_preload_libraries=oauthtest",
+                    "-c oauth_validator_libraries=oauthtest",
                 ]
             )
 
