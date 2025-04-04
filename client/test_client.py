@@ -1,5 +1,6 @@
 #
 # Copyright 2021 VMware, Inc.
+# Portions Copyright (c) 2024-2025, PostgreSQL Global Development Group
 # SPDX-License-Identifier: PostgreSQL
 #
 
@@ -11,6 +12,8 @@ import pytest
 from cryptography.hazmat.primitives import hashes, hmac
 
 import pq3
+
+from .test_oauth import alt_patterns
 
 
 def finish_handshake(conn):
@@ -42,7 +45,11 @@ def test_aborted_connection(accept):
     sock, client = accept()
     sock.close()
 
-    expected = "server closed the connection unexpectedly"
+    expected = alt_patterns(
+        "server closed the connection unexpectedly",
+        # On some platforms, ECONNABORTED gets set instead.
+        "Software caused connection abort",
+    )
     with pytest.raises(psycopg2.OperationalError, match=expected):
         client.check_completed()
 
