@@ -627,10 +627,10 @@ def test_oauth_bad_response_to_error_challenge(conn, oauth_ctx, resp_type, resp,
     "type,payload,err",
     [
         pytest.param(
-            pq3.types.ErrorResponse,
-            dict(fields=[b""]),
+            pq3.types.Query,
+            dict(query=b""),
             ExpectedError(PROTOCOL_VIOLATION_ERRCODE, "expected SASL response"),
-            id="error response in initial message",
+            id="query in initial message",
         ),
         pytest.param(
             None,
