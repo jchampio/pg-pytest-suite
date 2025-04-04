@@ -1,11 +1,14 @@
 #
 # Copyright 2021 VMware, Inc.
-# Portions Copyright (c) 2024, PostgreSQL Global Development Group
+# Portions Copyright (c) 2024-2025, PostgreSQL Global Development Group
 # SPDX-License-Identifier: PostgreSQL
 #
 
 import contextlib
 import ctypes
+import datetime
+import functools
+import ipaddress
 import os
 import socket
 import struct
@@ -15,6 +18,10 @@ import threading
 import psycopg2
 import psycopg2.extras
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 
 import pq3
 
@@ -303,3 +310,52 @@ def require_gssapi(accept, gss_cred_cache):
 
     # Let the test set up its own client.
     accept.reset()
+
+
+@pytest.fixture(scope="session")
+def certpair(tmp_path_factory):
+    """
+    Yields a (cert, key) pair of file paths that can be used by a TLS server.
+    The certificate is issued for "localhost" and its standard IPv4/6 addresses.
+    """
+
+    tmpdir = tmp_path_factory.mktemp("certs")
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # https://cryptography.io/en/latest/x509/tutorial/#creating-a-self-signed-certificate
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    altNames = [
+        x509.DNSName("localhost"),
+        x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+        x509.IPAddress(ipaddress.IPv6Address("::1")),
+    ]
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(minutes=10))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(x509.SubjectAlternativeName(altNames), critical=False)
+    ).sign(key, hashes.SHA256())
+
+    # Writing the key with mode 0600 lets us use this from the server side, too.
+    keypath = str(tmpdir / "key.pem")
+    with open(keypath, "wb", opener=functools.partial(os.open, mode=0o600)) as f:
+        f.write(
+            key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+        )
+
+    certpath = str(tmpdir / "cert.pem")
+    with open(certpath, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+    return certpath, keypath
