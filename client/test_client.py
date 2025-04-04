@@ -25,6 +25,7 @@ def finish_handshake(conn):
     pq3.send(conn, pq3.types.AuthnRequest, type=pq3.authn.OK)
     pq3.send(conn, pq3.types.ParameterStatus, name=b"client_encoding", value=b"UTF-8")
     pq3.send(conn, pq3.types.ParameterStatus, name=b"DateStyle", value=b"ISO, MDY")
+    pq3.send(conn, pq3.types.BackendKeyData, pid=1234, key=0)
     pq3.send(conn, pq3.types.ReadyForQuery, status=b"I")
 
     pkt = pq3.recv1(conn)
