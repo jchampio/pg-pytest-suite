@@ -3,7 +3,7 @@
  * oauthtest.c
  *	  Test module for serverside OAuth token validation callbacks
  *
- * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/test/python/server/oauthtest.c
@@ -22,11 +22,14 @@ PG_MODULE_MAGIC;
 
 static void test_startup(ValidatorModuleState *state);
 static void test_shutdown(ValidatorModuleState *state);
-static ValidatorModuleResult * test_validate(ValidatorModuleState *state,
-											 const char *token,
-											 const char *role);
+static bool test_validate(const ValidatorModuleState *state,
+						  const char *token,
+						  const char *role,
+						  ValidatorModuleResult *result);
 
 static const OAuthValidatorCallbacks callbacks = {
+	PG_OAUTH_VALIDATOR_MAGIC,
+
 	.startup_cb = test_startup,
 	.shutdown_cb = test_shutdown,
 	.validate_cb = test_validate,
@@ -94,25 +97,23 @@ test_shutdown(ValidatorModuleState *state)
 {
 }
 
-static ValidatorModuleResult *
-test_validate(ValidatorModuleState *state, const char *token, const char *role)
+static bool
+test_validate(const ValidatorModuleState *state,
+			  const char *token, const char *role,
+			  ValidatorModuleResult *res)
 {
-	ValidatorModuleResult *res;
-
-	res = palloc0(sizeof(ValidatorModuleResult));	/* TODO: palloc context? */
-
 	if (reflect_role)
 	{
-		res->authenticated = true;
-		res->authn_id = pstrdup(role);	/* TODO: constify? */
+		res->authorized = true;
+		res->authn_id = pstrdup(role);
 	}
 	else
 	{
-		if (*expected_bearer && !strcmp(token, expected_bearer))
-			res->authenticated = true;
+		if (*expected_bearer && strcmp(token, expected_bearer) == 0)
+			res->authorized = true;
 		if (set_authn_id)
-			res->authn_id = authn_id;
+			res->authn_id = pstrdup(authn_id);
 	}
 
-	return res;
+	return true;
 }
