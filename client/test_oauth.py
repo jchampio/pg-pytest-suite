@@ -2004,7 +2004,7 @@ def test_oauth_discovery(accept, openid_provider, base_response, scope, success)
             id="bad JSON: invalid syntax",
         ),
         pytest.param(
-            b"\xFF\xFF\xFF\xFF",
+            b"\xff\xff\xff\xff",
             "server's error response is not valid UTF-8",
             id="bad JSON: invalid encoding",
         ),
@@ -2146,7 +2146,7 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
             id="NULL bytes in document",
         ),
         pytest.param(
-            (200, RawBytes(b"blah\xFFblah")),
+            (200, RawBytes(b"blah\xffblah")),
             r"failed to parse OpenID discovery document: response is not valid UTF-8",
             id="document is not UTF-8",
         ),

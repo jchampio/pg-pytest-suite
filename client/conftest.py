@@ -276,7 +276,7 @@ def gss_cred_cache():
                 0,  # ticket flags
             )
         )
-        write_addresses(cache, IPV4, b"\x7F\x00\x00\x01")
+        write_addresses(cache, IPV4, b"\x7f\x00\x00\x01")
         cache.write(struct.pack(">I", 0))  # no authorizationdata
         write_data(cache, b"ticket")
         write_data(cache, b"second_ticket")

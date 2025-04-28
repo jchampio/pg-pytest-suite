@@ -38,7 +38,7 @@ import pq3
             id="1-byte payload and extra padding",
         ),
         pytest.param(
-            b"\x00\x00\x00\x0B\x00\x03\x00\x00hi\x00",
+            b"\x00\x00\x00\x0b\x00\x03\x00\x00hi\x00",
             Container(len=11, proto=pq3.protocol(3, 0), payload=[b"hi"]),
             b"",
             id="implied parameter list when using proto version 3.0",
@@ -63,7 +63,7 @@ def test_Startup_parse(raw, expected, extra):
         ),
         pytest.param(
             dict(len=10, proto=0x12345678),
-            b"\x00\x00\x00\x0A\x12\x34\x56\x78\x00\x00",
+            b"\x00\x00\x00\x0a\x12\x34\x56\x78\x00\x00",
             id="len and proto set explicitly",
         ),
         pytest.param(
@@ -73,7 +73,7 @@ def test_Startup_parse(raw, expected, extra):
         ),
         pytest.param(
             dict(proto=0x12345678, payload=b"abcd"),
-            b"\x00\x00\x00\x0C\x12\x34\x56\x78abcd",
+            b"\x00\x00\x00\x0c\x12\x34\x56\x78abcd",
             id="implied len with payload",
         ),
         pytest.param(
@@ -83,7 +83,7 @@ def test_Startup_parse(raw, expected, extra):
         ),
         pytest.param(
             dict(payload=[b"hi", b""]),
-            b"\x00\x00\x00\x0C\x00\x03\x00\x00hi\x00\x00",
+            b"\x00\x00\x00\x0c\x00\x03\x00\x00hi\x00\x00",
             id="implied proto version 3 and len when sending more than one parameter",
         ),
         pytest.param(
@@ -130,7 +130,7 @@ def test_Startup_build(packet, expected_bytes):
             id="AuthenticationOk",
         ),
         pytest.param(
-            b"R\x00\x00\x00\x12\x00\x00\x00\x0AEXTERNAL\x00\x00",
+            b"R\x00\x00\x00\x12\x00\x00\x00\x0aEXTERNAL\x00\x00",
             dict(
                 type=pq3.types.AuthnRequest,
                 len=18,
@@ -140,7 +140,7 @@ def test_Startup_build(packet, expected_bytes):
             id="AuthenticationSASL",
         ),
         pytest.param(
-            b"R\x00\x00\x00\x0D\x00\x00\x00\x0B12345",
+            b"R\x00\x00\x00\x0d\x00\x00\x00\x0b12345",
             dict(
                 type=pq3.types.AuthnRequest,
                 len=13,
@@ -150,7 +150,7 @@ def test_Startup_build(packet, expected_bytes):
             id="AuthenticationSASLContinue",
         ),
         pytest.param(
-            b"R\x00\x00\x00\x0D\x00\x00\x00\x0C12345",
+            b"R\x00\x00\x00\x0d\x00\x00\x00\x0c12345",
             dict(
                 type=pq3.types.AuthnRequest,
                 len=13,
@@ -160,7 +160,7 @@ def test_Startup_build(packet, expected_bytes):
             id="AuthenticationSASLFinal",
         ),
         pytest.param(
-            b"p\x00\x00\x00\x0Bhunter2",
+            b"p\x00\x00\x00\x0bhunter2",
             dict(
                 type=pq3.types.PasswordMessage,
                 len=11,
@@ -170,7 +170,7 @@ def test_Startup_build(packet, expected_bytes):
             id="PasswordMessage",
         ),
         pytest.param(
-            b"K\x00\x00\x00\x0C\x00\x00\x00\x00\x12\x34\x56\x78",
+            b"K\x00\x00\x00\x0c\x00\x00\x00\x00\x12\x34\x56\x78",
             dict(
                 type=pq3.types.BackendKeyData,
                 len=12,
@@ -228,17 +228,17 @@ def test_Startup_build(packet, expected_bytes):
             id="Parse",
         ),
         pytest.param(
-            b"P\x00\x00\x00\x18ddd\x00SELECT 1;\x00\x00\x01\x00\x00\x00\x02\xAA\xBB\xCC\xDD",
+            b"P\x00\x00\x00\x18ddd\x00SELECT 1;\x00\x00\x01\x00\x00\x00\x02\xaa\xbb\xcc\xdd",
             dict(
                 type=pq3.types.Parse,
                 len=24,
                 payload=dict(dest=b"ddd", query=b"SELECT 1;", typids=[2]),
             ),
-            b"\xAA\xBB\xCC\xDD",
+            b"\xaa\xbb\xcc\xdd",
             id="Parse with extra data",
         ),
         pytest.param(
-            b"T\x00\x00\x00\x2E\x00\x02"
+            b"T\x00\x00\x00\x2e\x00\x02"
             + b"a\x00\x00\x00\x00\x01\x00\x02\x00\x00\x00\x03\x00\x04\x00\x00\x00\x05\x00\x00"
             + b"b\x00\x00\x00\x00\x05\x00\x04\x00\x00\x00\x03\x00\x02\x00\x00\x00\x01\x00\x01",
             dict(
@@ -277,7 +277,7 @@ def test_Startup_build(packet, expected_bytes):
             id="RowDescription with extra data",
         ),
         pytest.param(
-            b"D\x00\x00\x00\x0B\x00\x01\x00\x00\x00\x01!",
+            b"D\x00\x00\x00\x0b\x00\x01\x00\x00\x00\x01!",
             dict(type=pq3.types.DataRow, len=11, payload=dict(columns=[b"!"])),
             b"",
             id="DataRow",
@@ -295,9 +295,9 @@ def test_Startup_build(packet, expected_bytes):
             id="EmptyQueryResponse",
         ),
         pytest.param(
-            b"I\x00\x00\x00\x04\xFF",
+            b"I\x00\x00\x00\x04\xff",
             dict(type=b"I", len=4, payload=None),
-            b"\xFF",
+            b"\xff",
             id="EmptyQueryResponse with extra bytes",
         ),
         pytest.param(
@@ -307,7 +307,7 @@ def test_Startup_build(packet, expected_bytes):
             id="Terminate",
         ),
         pytest.param(
-            b"v\x00\x00\x00\x1A\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00",
+            b"v\x00\x00\x00\x1a\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00",
             dict(
                 type=pq3.types.NegotiateProtocolVersion,
                 len=26,
@@ -317,7 +317,7 @@ def test_Startup_build(packet, expected_bytes):
             id="NegotiateProtocolVersion",
         ),
         pytest.param(
-            b"v\x00\x00\x00\x0C\x00\x00\x00\x03\x00\x00\x00\x00",
+            b"v\x00\x00\x00\x0c\x00\x00\x00\x03\x00\x00\x00\x00",
             dict(
                 type=pq3.types.NegotiateProtocolVersion,
                 len=12,
@@ -327,7 +327,7 @@ def test_Startup_build(packet, expected_bytes):
             id="NegotiateProtocolVersion with no unsupported",
         ),
         pytest.param(
-            b"v\x00\x00\x00\x1A\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00\x00",
+            b"v\x00\x00\x00\x1a\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00\x00",
             dict(
                 type=pq3.types.NegotiateProtocolVersion,
                 len=26,
@@ -377,7 +377,7 @@ def test_Pq3_parse(raw, expected, extra):
                     body=[b"SCRAM-SHA-256-PLUS", b"SCRAM-SHA-256", b""],
                 ),
             ),
-            b"R\x00\x00\x00\x2A\x00\x00\x00\x0ASCRAM-SHA-256-PLUS\x00SCRAM-SHA-256\x00\x00",
+            b"R\x00\x00\x00\x2a\x00\x00\x00\x0aSCRAM-SHA-256-PLUS\x00SCRAM-SHA-256\x00\x00",
             id="implied len/type for AuthenticationSASL",
         ),
         pytest.param(
@@ -385,7 +385,7 @@ def test_Pq3_parse(raw, expected, extra):
                 type=pq3.types.AuthnRequest,
                 payload=dict(type=pq3.authn.SASLContinue, body=b"12345"),
             ),
-            b"R\x00\x00\x00\x0D\x00\x00\x00\x0B12345",
+            b"R\x00\x00\x00\x0d\x00\x00\x00\x0b12345",
             id="implied len/type for AuthenticationSASLContinue",
         ),
         pytest.param(
@@ -393,7 +393,7 @@ def test_Pq3_parse(raw, expected, extra):
                 type=pq3.types.AuthnRequest,
                 payload=dict(type=pq3.authn.SASLFinal, body=b"12345"),
             ),
-            b"R\x00\x00\x00\x0D\x00\x00\x00\x0C12345",
+            b"R\x00\x00\x00\x0d\x00\x00\x00\x0c12345",
             id="implied len/type for AuthenticationSASLFinal",
         ),
         pytest.param(
@@ -401,12 +401,12 @@ def test_Pq3_parse(raw, expected, extra):
                 type=pq3.types.PasswordMessage,
                 payload=b"hunter2",
             ),
-            b"p\x00\x00\x00\x0Bhunter2",
+            b"p\x00\x00\x00\x0bhunter2",
             id="implied len/type for PasswordMessage",
         ),
         pytest.param(
             dict(type=pq3.types.BackendKeyData, payload=dict(pid=1, key=7)),
-            b"K\x00\x00\x00\x0C\x00\x00\x00\x01\x00\x00\x00\x07",
+            b"K\x00\x00\x00\x0c\x00\x00\x00\x01\x00\x00\x00\x07",
             id="implied len/type for BackendKeyData",
         ),
         pytest.param(
@@ -416,7 +416,7 @@ def test_Pq3_parse(raw, expected, extra):
         ),
         pytest.param(
             dict(type=pq3.types.ErrorResponse, payload=dict(fields=[b"error", b""])),
-            b"E\x00\x00\x00\x0Berror\x00\x00",
+            b"E\x00\x00\x00\x0berror\x00\x00",
             id="implied len/type for ErrorResponse",
         ),
         pytest.param(
@@ -441,7 +441,7 @@ def test_Pq3_parse(raw, expected, extra):
         ),
         pytest.param(
             dict(type=pq3.types.Bind, payload=dict()),
-            b"B\x00\x00\x00\x0C\x00\x00\x00\x00\x00\x00\x00\x00",
+            b"B\x00\x00\x00\x0c\x00\x00\x00\x00\x00\x00\x00\x00",
             id="implied parameters for empty Bind",
         ),
         pytest.param(
@@ -461,7 +461,7 @@ def test_Pq3_parse(raw, expected, extra):
         ),
         pytest.param(
             dict(type=pq3.types.DataRow, payload=dict(columns=[b"abcd"])),
-            b"D\x00\x00\x00\x0E\x00\x01\x00\x00\x00\x04abcd",
+            b"D\x00\x00\x00\x0e\x00\x01\x00\x00\x00\x04abcd",
             id="implied len/type for DataRow",
         ),
         pytest.param(
@@ -479,12 +479,12 @@ def test_Pq3_parse(raw, expected, extra):
                 type=pq3.types.NegotiateProtocolVersion,
                 payload=dict(version=3, unsupported=[b"_pq_.1", b"_pq_.2"]),
             ),
-            b"v\x00\x00\x00\x1A\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00",
+            b"v\x00\x00\x00\x1a\x00\x00\x00\x03\x00\x00\x00\x02_pq_.1\x00_pq_.2\x00",
             id="implied len for NegotiateProtocolVersion",
         ),
         pytest.param(
             dict(type=pq3.types.NegotiateProtocolVersion, payload=dict(version=3)),
-            b"v\x00\x00\x00\x0C\x00\x00\x00\x03\x00\x00\x00\x00",
+            b"v\x00\x00\x00\x0c\x00\x00\x00\x03\x00\x00\x00\x00",
             id="default unsupported for NegotiateProtocolVersion",
         ),
     ],
@@ -522,7 +522,7 @@ def test_Pq3_build(fields, expected):
             id="empty column value",
         ),
         pytest.param(
-            b"\x00\x02\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
+            b"\x00\x02\xff\xff\xff\xff\xff\xff\xff\xff",
             dict(columns=[None, None]),
             b"",
             id="null columns",
@@ -549,7 +549,7 @@ def test_DataRow_parse(raw, expected, extra):
         ),
         pytest.param(
             dict(columns=[None, None]),
-            b"\x00\x02\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
+            b"\x00\x02\xff\xff\xff\xff\xff\xff\xff\xff",
             id="null columns",
         ),
     ],
@@ -570,7 +570,7 @@ def test_DataRow_build(fields, expected):
             id="all empty",
         ),
         pytest.param(
-            b"p\x00s\x00\x00\x02\x00\x00\x00\x01\x00\x02\xFF\xFF\xFF\xFF\x00\x00\x00\x03123\x00\x01\x00\x01",
+            b"p\x00s\x00\x00\x02\x00\x00\x00\x01\x00\x02\xff\xff\xff\xff\x00\x00\x00\x03123\x00\x01\x00\x01",
             dict(
                 portal=b"p",
                 stmt=b"s",
@@ -617,7 +617,7 @@ def test_Bind_parse(raw, expected):
         ),
         pytest.param(
             dict(params=[None, None]),
-            b"\x00\x00\x00\x00\x00\x02\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x00\x00",
+            b"\x00\x00\x00\x00\x00\x02\xff\xff\xff\xff\xff\xff\xff\xff\x00\x00",
             id="only NULL parameter values",
         ),
         pytest.param(
@@ -643,7 +643,7 @@ def test_Bind_build(fields, expected):
     "raw,expected,exception",
     [
         pytest.param(
-            b"EXTERNAL\x00\xFF\xFF\xFF\xFF",
+            b"EXTERNAL\x00\xff\xff\xff\xff",
             dict(name=b"EXTERNAL", len=-1, data=None),
             None,
             id="no initial response",
@@ -661,7 +661,7 @@ def test_Bind_build(fields, expected):
             id="extra data",
         ),
         pytest.param(
-            b"EXTERNAL\x00\x00\x00\x00\xFFme",
+            b"EXTERNAL\x00\x00\x00\x00\xffme",
             None,
             StreamError,
             id="underflow",
@@ -683,12 +683,12 @@ def test_SASLInitialResponse_parse(raw, expected, exception):
     [
         pytest.param(
             dict(name=b"EXTERNAL"),
-            b"EXTERNAL\x00\xFF\xFF\xFF\xFF",
+            b"EXTERNAL\x00\xff\xff\xff\xff",
             id="no initial response",
         ),
         pytest.param(
             dict(name=b"EXTERNAL", data=None),
-            b"EXTERNAL\x00\xFF\xFF\xFF\xFF",
+            b"EXTERNAL\x00\xff\xff\xff\xff",
             id="no initial response (explicit None)",
         ),
         pytest.param(
@@ -698,7 +698,7 @@ def test_SASLInitialResponse_parse(raw, expected, exception):
         ),
         pytest.param(
             dict(name=b"EXTERNAL", data=b"me@example.com"),
-            b"EXTERNAL\x00\x00\x00\x00\x0Eme@example.com",
+            b"EXTERNAL\x00\x00\x00\x00\x0eme@example.com",
             id="initial response",
         ),
         pytest.param(
@@ -708,7 +708,7 @@ def test_SASLInitialResponse_parse(raw, expected, exception):
         ),
         pytest.param(
             dict(name=b"EXTERNAL", len=14, data=b"me"),
-            b"EXTERNAL\x00\x00\x00\x00\x0Eme",
+            b"EXTERNAL\x00\x00\x00\x00\x0eme",
             id="data underflow",
         ),
     ],
@@ -750,12 +750,12 @@ def test_SASLInitialResponse_build(fields, expected):
         pytest.param(
             dict(
                 msg_type=pq3.types.Execute,
-                built=b"E\x00\x00\x00\x0Ap\x00\x00\x00 \x00",
+                built=b"E\x00\x00\x00\x0ap\x00\x00\x00 \x00",
                 payload=dict(portal=b"p", maxrows=0x2000),
             ),
             dict(
                 msg_type=pq3.types.ErrorResponse,
-                built=b"E\x00\x00\x00\x0Ap\x00\x00\x00 \x00",
+                built=b"E\x00\x00\x00\x0ap\x00\x00\x00 \x00",
                 payload=dict(fields=[b"p", b"", b"", b" "]),
             ),
             id="'E' Execute/ErrorResponse",
