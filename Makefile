@@ -32,7 +32,7 @@ $(PYTEST) $(ISORT) $(BLACK) &: requirements.txt | $(PIP)
 	$(PIP) install --force-reinstall -r $<
 
 $(PIP):
-	$(PYTHON3) -m venv $(VENV)
+	$(PYTHON3) -m venv --system-site-packages $(VENV)
 
 # A convenience recipe to rebuild psycopg2 against the local libpq.
 .PHONY: rebuild-psycopg2
