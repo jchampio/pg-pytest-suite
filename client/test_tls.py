@@ -15,7 +15,7 @@ from cryptography.x509.oid import NameOID
 import pq3
 import tls
 
-from .conftest import libpq_has_option
+from .conftest import alt_patterns, libpq_has_option
 from .test_client import finish_handshake
 
 
@@ -173,7 +173,8 @@ def test_direct_ssl_failed_negotiation(accept, certpair):
 
             # ...then drop the connection.
 
-    with pytest.raises(psycopg2.OperationalError, match="EOF detected"):
+    expected = alt_patterns("SSL error: unexpected eof", "EOF detected")
+    with pytest.raises(psycopg2.OperationalError, match=expected):
         client.check_completed()
 
 
@@ -202,13 +203,8 @@ def test_gssapi_negotiation(require_gssapi, accept, certpair):
             conn.write(b"N")
             conn.flush_debug(prefix="  ")
 
-            # Second attempt is standard SSL.
-            startup = pq3.recv1(conn, cls=pq3.Startup)
-            assert startup.proto == pq3.protocol(1234, 5679)
-
-            # Reject it, too.
-            conn.write(b"N")
-            conn.flush_debug(prefix="  ")
+            # The client should disconnect.
+            assert not conn.read(1), "client sent unexpected data"
 
     # Accept the next connection, which should be direct SSL.
     sock, _ = accept()
@@ -223,6 +219,6 @@ def test_gssapi_negotiation(require_gssapi, accept, certpair):
 
             # Reject the direct SSL connection by dropping it.
 
-    # TODO: decide on the actual error message
-    with pytest.raises(psycopg2.OperationalError, match="TODO"):
+    expected = alt_patterns("SSL error: unexpected eof", "EOF detected")
+    with pytest.raises(psycopg2.OperationalError, match=expected):
         client.check_completed()

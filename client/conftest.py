@@ -359,3 +359,18 @@ def certpair(tmp_path_factory):
         f.write(cert.public_bytes(serialization.Encoding.PEM))
 
     return certpath, keypath
+
+
+def alt_patterns(*patterns):
+    """
+    Just combines multiple alternative regexes into one. It's not very efficient
+    but IMO it's easier to read and maintain.
+    """
+    pat = ""
+
+    for p in patterns:
+        if pat:
+            pat += "|"
+        pat += f"({p})"
+
+    return pat

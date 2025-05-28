@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives import hashes, hmac
 
 import pq3
 
-from .test_oauth import alt_patterns
+from .conftest import alt_patterns
 
 
 def finish_handshake(conn):

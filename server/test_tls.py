@@ -7,6 +7,7 @@ import pytest
 from psycopg2 import sql
 
 import pq3
+from client.conftest import alt_patterns
 from client.test_tls import ALPN_PROTO, certpair
 
 
@@ -170,13 +171,15 @@ def test_direct_tls(ssl_ctx, connect, require_direct_ssl_support, protos):
 
 
 @pytest.mark.parametrize(
-    "protos",
+    "protos, handshake_fails",
     (
-        pytest.param([], id="no application protocols"),
-        pytest.param(["http/1.1"], id="incorrect application protocol"),
+        pytest.param([], False, id="no application protocols"),
+        pytest.param(["http/1.1"], True, id="incorrect application protocol"),
     ),
 )
-def test_direct_ssl_without_alpn(ssl_ctx, connect, require_direct_ssl_support, protos):
+def test_direct_ssl_without_alpn(
+    ssl_ctx, connect, require_direct_ssl_support, protos, handshake_fails
+):
     """
     Make sure the server rejects direct connections without the expected ALPN.
     """
@@ -188,8 +191,19 @@ def test_direct_ssl_without_alpn(ssl_ctx, connect, require_direct_ssl_support, p
 
     tls = pq3._TLSStream(conn, ctx, server_hostname="example.org")
 
-    with pytest.raises(ssl.SSLError, match="no application protocol"):
+    errctx = contextlib.nullcontext()
+    if handshake_fails:
+        # Older versions of OpenSSL don't correctly report the "no application
+        # protocol" string (https://github.com/openssl/openssl/issues/24300) so
+        # handle an "unknown error" as well.
+        expected = alt_patterns("no application protocol", "unknown error")
+        errctx = pytest.raises(ssl.SSLError, match=expected)
+
+    with errctx:
         tls.handshake()
+
+    # Server should disconnect immediately, even if the handshake succeeded.
+    assert not tls.read(1), "server sent unexpected data"
 
 
 def _require_server_support(instance, guc):
