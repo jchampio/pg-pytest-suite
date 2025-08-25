@@ -2359,7 +2359,10 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
         #
         pytest.param(
             (1000, {}),
-            r"failed to fetch OpenID discovery document: Unsupported protocol \(.*\)",
+            alt_patterns(
+                r"failed to fetch OpenID discovery document: Unsupported protocol \(.*\)",
+                r"failed to fetch OpenID discovery document: Weird server reply \(.*status.*\)",
+            ),
             id="invalid HTTP response code",
         ),
         pytest.param(
