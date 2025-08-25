@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import platform
+import re
 import secrets
 import socket
 import ssl
@@ -536,6 +537,41 @@ PGOAuthBearerRequest._fields_ = [
 
 
 @pytest.fixture
+def check_call_count(capfd):
+    """
+    Yields a test function that checks the number of calls to the internal flow,
+    which is printed in the debug output. The exact number depends on many
+    things -- the TCP stack, the version of Curl in use, random chance -- but a
+    ridiculously high number suggests something is wrong with our ability to
+    clear multiplexer events after they're no longer applicable.
+    """
+
+    def check(client):
+        # Wait for the client to finish, rather than racing against its output.
+        client.check_completed()
+
+        # Grab the output and re-echo it for debuggability; capfd.readouterr()
+        # drains the capture buffers for some reason.
+        stdout, stderr = capfd.readouterr()
+        sys.stdout.write(stdout)
+        sys.stderr.write(stderr)
+
+        # Find the call count.
+        pattern = r"\[libpq\] total number of polls: (\d+)"
+        match = re.search(pattern, stderr)
+        assert match is not None, f"test's stderr did not match pattern '{pattern}'"
+
+        # For reference, a typical flow with two retries might take between 5-15
+        # calls to the client implementation. And while this will probably
+        # continue to change across OSes and Curl updates, we're likely in
+        # trouble if we see hundreds or thousands of calls.
+        call_count = int(match.group(1))
+        assert call_count < 100
+
+    yield check
+
+
+@pytest.fixture
 def auth_data_cb():
     """
     Tracks calls to the libpq authdata hook. The yielded object contains a calls
@@ -645,6 +681,7 @@ def auth_data_cb():
 def test_oauth_with_explicit_discovery_uri(
     accept,
     openid_provider,
+    check_call_count,
     asynchronous,
     uri_spelling,
     content_type,
@@ -801,6 +838,9 @@ def test_oauth_with_explicit_discovery_uri(
         # The client should not try to connect again.
         with pytest.raises(psycopg2.OperationalError, match=expected_error):
             client.check_completed()
+
+    # Sanity-check the number of calls made to the flow.
+    check_call_count(client)
 
 
 @pytest.mark.parametrize(
@@ -1226,7 +1266,7 @@ def test_url_encoding(accept, openid_provider, client_id, secret, device_code, s
 @pytest.mark.parametrize("retries", [1, 2])
 @pytest.mark.parametrize("omit_interval", [True, False])
 def test_oauth_retry_interval(
-    accept, openid_provider, omit_interval, retries, error_code
+    accept, openid_provider, check_call_count, omit_interval, retries, error_code
 ):
     sock, client = accept(
         oauth_issuer=openid_provider.discovery_uri,
@@ -1321,6 +1361,9 @@ def test_oauth_retry_interval(
             assert auth == f"Bearer {access_token}".encode("ascii")
 
             finish_handshake(conn)
+
+    # Sanity-check the number of calls made to the flow.
+    check_call_count(client)
 
 
 @pytest.fixture
