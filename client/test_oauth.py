@@ -31,7 +31,7 @@ import pytest
 
 import pq3
 
-from .conftest import BLOCKING_TIMEOUT
+from .conftest import BLOCKING_TIMEOUT, alt_patterns
 
 # The client tests need libpq to have been compiled with OAuth support; skip
 # them otherwise.
