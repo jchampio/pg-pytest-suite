@@ -63,9 +63,9 @@ class KeyValueAdapter(Adapter):
 KeyValues = KeyValueAdapter(StringList)
 
 _startup_payload = Switch(
-    this.proto,
+    this.proto >> 16,
     {
-        protocol(3, 0): KeyValues,
+        3: KeyValues,
     },
     default=GreedyBytes,
 )

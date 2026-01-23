@@ -43,6 +43,12 @@ import pq3
             b"",
             id="implied parameter list when using proto version 3.0",
         ),
+        pytest.param(
+            b"\x00\x00\x00\x0b\x00\x03\x00\x02hi\x00",
+            Container(len=11, proto=pq3.protocol(3, 2), payload=[b"hi"]),
+            b"",
+            id="implied parameter list when using proto version 3.2",
+        ),
     ],
 )
 def test_Startup_parse(raw, expected, extra):
