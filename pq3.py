@@ -230,6 +230,7 @@ types = ByteEnum(
 authn = Enum(
     Int32ub,
     OK=0,
+    CleartextPassword=3,
     SASL=10,
     SASLContinue=11,
     SASLFinal=12,
