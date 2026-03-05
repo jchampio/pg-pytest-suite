@@ -424,6 +424,28 @@ Pq3 = Struct(
 )
 
 
+# Negotiation
+
+
+def negotiate(conn, startup, *, minor_version=0):
+    """
+    Asserts that the startup packet from the client is using 3.x, then
+    downgrades to the specified minor version if necessary. For now all protocol
+    extensions are declined.
+    """
+    assert (startup.proto >> 16) == 3
+
+    # TODO: also negotiate if any _pq_ extensions are sent
+    if (startup.proto & 0xFFFF) > minor_version:
+        send(
+            conn,
+            types.NegotiateProtocolVersion,
+            version=protocol(3, minor_version),
+            # XXX this searches values too
+            unsupported=[k for k in startup.payload if k.startswith(b"_pq_.")],
+        )
+
+
 # Environment
 
 

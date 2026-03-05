@@ -22,6 +22,7 @@ def finish_handshake(conn):
     messages, then asserts that the client immediately sends a Terminate message
     to close the connection cleanly.
     """
+
     pq3.send(conn, pq3.types.AuthnRequest, type=pq3.authn.OK)
     pq3.send(conn, pq3.types.ParameterStatus, name=b"client_encoding", value=b"UTF-8")
     pq3.send(conn, pq3.types.ParameterStatus, name=b"DateStyle", value=b"ISO, MDY")
@@ -34,7 +35,7 @@ def finish_handshake(conn):
 
 def test_handshake(conn):
     startup = pq3.recv1(conn, cls=pq3.Startup)
-    assert startup.proto == pq3.protocol(3, 0)
+    pq3.negotiate(conn, startup)
 
     finish_handshake(conn)
 
@@ -122,7 +123,7 @@ def h_i(data, salt, i):
 
 def test_scram(pwconn, password):
     startup = pq3.recv1(pwconn, cls=pq3.Startup)
-    assert startup.proto == pq3.protocol(3, 0)
+    pq3.negotiate(pwconn, startup)
 
     pq3.send(
         pwconn,

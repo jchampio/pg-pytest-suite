@@ -75,7 +75,7 @@ def start_oauth_handshake(conn):
     response data.
     """
     startup = pq3.recv1(conn, cls=pq3.Startup)
-    assert startup.proto == pq3.protocol(3, 0)
+    pq3.negotiate(conn, startup)
 
     pq3.send(
         conn, pq3.types.AuthnRequest, type=pq3.authn.SASL, body=[b"OAUTHBEARER", b""]
@@ -1113,7 +1113,7 @@ def expect_disconnected_handshake(sock):
     with pq3.wrap(sock, debug_stream=sys.stdout) as conn:
         # Initiate a handshake.
         startup = pq3.recv1(conn, cls=pq3.Startup)
-        assert startup.proto == pq3.protocol(3, 0)
+        pq3.negotiate(conn, startup)
 
         pq3.send(
             conn,

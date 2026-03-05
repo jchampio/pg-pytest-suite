@@ -84,7 +84,7 @@ def test_negotiated_ssl(accept, certpair):
 
             with pq3.tls_handshake(conn, ctx, server_side=True) as tls:
                 startup = pq3.recv1(tls, cls=pq3.Startup)
-                assert startup.proto == pq3.protocol(3, 0)
+                pq3.negotiate(tls, startup)
 
                 finish_handshake(tls)
 
@@ -114,7 +114,7 @@ def test_direct_ssl(accept, certpair):
             tls = pq3._DebugStream(tls, conn._out)
 
             startup = pq3.recv1(tls, cls=pq3.Startup)
-            assert startup.proto == pq3.protocol(3, 0)
+            pq3.negotiate(tls, startup)
 
             finish_handshake(tls)
 
