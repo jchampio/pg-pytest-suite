@@ -1097,7 +1097,9 @@ def test_bad_well_known_paths(
         if server_discovery:
             expected_error = rf"server's discovery document at {discovery_uri} \(issuer \".*\"\) is incompatible with oauth_issuer \({issuer}\)"
         else:
-            expected_error = rf"the issuer identifier \({issuer}\) does not match oauth_issuer \(.*\)"
+            expected_error = (
+                rf"issuer identifier \({issuer}\) does not match oauth_issuer \(.*\)"
+            )
 
     with pytest.raises(psycopg2.OperationalError, match=expected_error):
         client.check_completed()
@@ -1564,47 +1566,47 @@ def test_user_defined_flow(
                     "error_description": "client authentication failed",
                 },
             ),
-            r"failed to obtain device authorization: client authentication failed \(invalid_client\)",
+            r"obtain device authorization: client authentication failed \(invalid_client\)",
             id="authentication failure with description",
         ),
         pytest.param(
             (400, {"error": "invalid_request"}),
-            r"failed to obtain device authorization: \(invalid_request\)",
+            r"obtain device authorization: \(invalid_request\)",
             id="invalid request without description",
         ),
         pytest.param(
             (400, {"error": "invalid_request", "padding": "x" * 256 * 1024}),
-            r"failed to obtain device authorization: response is too large",
+            r"obtain device authorization: response is too large",
             id="gigantic authz response",
         ),
         pytest.param(
             (200, RawResponse('{"":' + "[" * 16)),
-            r"failed to parse device authorization: JSON is too deeply nested",
+            r"parse device authorization: JSON is too deeply nested",
             id="overly nested authz response array",
         ),
         pytest.param(
             (200, RawResponse('{"":' * 17)),
-            r"failed to parse device authorization: JSON is too deeply nested",
+            r"parse device authorization: JSON is too deeply nested",
             id="overly nested authz response object",
         ),
         pytest.param(
             (400, {}),
-            r'failed to parse token error response: field "error" is missing',
+            r'parse token error response: field "error" is missing',
             id="broken error response",
         ),
         pytest.param(
             (401, {"error": "invalid_client"}),
-            r"failed to obtain device authorization: provider requires client authentication, and no oauth_client_secret is set \(invalid_client\)",
+            r"obtain device authorization: provider requires client authentication, and no oauth_client_secret is set \(invalid_client\)",
             id="failed authentication without description",
         ),
         pytest.param(
             (200, RawResponse(r'{ "interval": 3.5.8 }')),
-            r"failed to parse device authorization: Token .* is invalid",
+            r"parse device authorization: Token .* is invalid",
             id="non-numeric interval",
         ),
         pytest.param(
             (200, RawResponse(r'{ "interval": 08 }')),
-            r"failed to parse device authorization: Token .* is invalid",
+            r"parse device authorization: Token .* is invalid",
             id="invalid numeric interval",
         ),
     ],
@@ -1745,52 +1747,52 @@ def test_oauth_device_authorization_bad_json_schema(
                     "error_description": "the device code has expired",
                 },
             ),
-            r"failed to obtain access token: the device code has expired \(expired_token\)",
+            r"obtain access token: the device code has expired \(expired_token\)",
             id="expired token with description",
         ),
         pytest.param(
             (400, {"error": "access_denied"}),
-            r"failed to obtain access token: \(access_denied\)",
+            r"obtain access token: \(access_denied\)",
             id="access denied without description",
         ),
         pytest.param(
             (400, {"error": "access_denied", "padding": "x" * 256 * 1024}),
-            r"failed to obtain access token: response is too large",
+            r"obtain access token: response is too large",
             id="gigantic token response",
         ),
         pytest.param(
             (200, RawResponse('{"":' + "[" * 16)),
-            r"failed to parse access token response: JSON is too deeply nested",
+            r"parse access token response: JSON is too deeply nested",
             id="overly nested token response array",
         ),
         pytest.param(
             (200, RawResponse('{"":' * 17)),
-            r"failed to parse access token response: JSON is too deeply nested",
+            r"parse access token response: JSON is too deeply nested",
             id="overly nested token response object",
         ),
         pytest.param(
             (400, {}),
-            r'failed to parse token error response: field "error" is missing',
+            r'parse token error response: field "error" is missing',
             id="empty error response",
         ),
         pytest.param(
             (401, {"error": "invalid_client"}),
-            r"failed to obtain access token: provider requires client authentication, and no oauth_client_secret is set \(invalid_client\)",
+            r"obtain access token: provider requires client authentication, and no oauth_client_secret is set \(invalid_client\)",
             id="authentication failure without description",
         ),
         pytest.param(
             (200, {}, {}),
-            r"failed to parse access token response: no content type was provided",
+            r"parse access token response: no content type was provided",
             id="missing content type",
         ),
         pytest.param(
             (200, {"Content-Type": "text/plain"}, {}),
-            r"failed to parse access token response: unexpected content type",
+            r"parse access token response: unexpected content type",
             id="wrong content type",
         ),
         pytest.param(
             (200, {"Content-Type": "application/jsonx"}, {}),
-            r"failed to parse access token response: unexpected content type",
+            r"parse access token response: unexpected content type",
             id="wrong content type (correct prefix)",
         ),
     ],
@@ -1939,7 +1941,7 @@ def test_oauth_token_bad_json_schema(
         handle_discovery_connection(sock, openid_provider.discovery_uri)
 
     # Now make sure the client correctly failed.
-    error_pattern = "failed to parse access token response: "
+    error_pattern = "parse access token response: "
     if bad_value is Missing:
         error_pattern += f'field "{field_name}" is missing'
     elif ok_type == str:
@@ -2176,77 +2178,77 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
     [
         pytest.param(
             (200, {"Content-Type": "text/plain"}, {}),
-            r'failed to parse OpenID discovery document: unexpected content type: "text/plain"',
+            r'parse OpenID discovery document: unexpected content type: "text/plain"',
             id="not JSON",
         ),
         pytest.param(
             (200, {}, {}),
-            r"failed to parse OpenID discovery document: no content type was provided",
+            r"parse OpenID discovery document: no content type was provided",
             id="no Content-Type",
         ),
         pytest.param(
             (204, {}, None),
-            r"failed to fetch OpenID discovery document: unexpected response code 204",
+            r"fetch OpenID discovery document: unexpected response code 204",
             id="no content",
         ),
         pytest.param(
             (301, {"Location": "https://localhost/"}, None),
-            r"failed to fetch OpenID discovery document: unexpected response code 301",
+            r"fetch OpenID discovery document: unexpected response code 301",
             id="redirection",
         ),
         pytest.param(
             (404, {}),
-            r"failed to fetch OpenID discovery document: unexpected response code 404",
+            r"fetch OpenID discovery document: unexpected response code 404",
             id="not found",
         ),
         pytest.param(
             (200, RawResponse("blah\x00blah")),
-            r"failed to parse OpenID discovery document: response contains embedded NULLs",
+            r"parse OpenID discovery document: response contains embedded null",
             id="NULL bytes in document",
         ),
         pytest.param(
             (200, RawBytes(b"blah\xffblah")),
-            r"failed to parse OpenID discovery document: response is not valid UTF-8",
+            r"parse OpenID discovery document: response is not valid UTF-8",
             id="document is not UTF-8",
         ),
         pytest.param(
             (200, 123),
-            r"failed to parse OpenID discovery document: top-level element must be an object",
+            r"parse OpenID discovery document: top-level element must be an object",
             id="scalar at top level",
         ),
         pytest.param(
             (200, []),
-            r"failed to parse OpenID discovery document: top-level element must be an object",
+            r"parse OpenID discovery document: top-level element must be an object",
             id="array at top level",
         ),
         pytest.param(
             (200, RawResponse("{")),
-            r"failed to parse OpenID discovery document.* input string ended unexpectedly",
+            r"parse OpenID discovery document.* input string ended unexpectedly",
             id="unclosed object",
         ),
         pytest.param(
             (200, RawResponse(r'{ "hello": ] }')),
-            r"failed to parse OpenID discovery document.* Expected JSON value",
+            r"parse OpenID discovery document.* Expected JSON value",
             id="bad array",
         ),
         pytest.param(
             (200, {"issuer": 123}),
-            r'failed to parse OpenID discovery document: field "issuer" must be a string',
+            r'parse OpenID discovery document: field "issuer" must be a string',
             id="non-string issuer",
         ),
         pytest.param(
             (200, {"issuer": ["something"]}),
-            r'failed to parse OpenID discovery document: field "issuer" must be a string',
+            r'parse OpenID discovery document: field "issuer" must be a string',
             id="issuer array",
         ),
         pytest.param(
             (200, {"issuer": {}}),
-            r'failed to parse OpenID discovery document: field "issuer" must be a string',
+            r'parse OpenID discovery document: field "issuer" must be a string',
             id="issuer object",
         ),
         pytest.param(
             (200, {"grant_types_supported": 123}),
-            r'failed to parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
+            r'parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
             id="numeric grant types field",
         ),
         pytest.param(
@@ -2256,32 +2258,32 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                     "grant_types_supported": "urn:ietf:params:oauth:grant-type:device_code"
                 },
             ),
-            r'failed to parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
+            r'parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
             id="string grant types field",
         ),
         pytest.param(
             (200, {"grant_types_supported": {}}),
-            r'failed to parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
+            r'parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
             id="object grant types field",
         ),
         pytest.param(
             (200, {"grant_types_supported": [123]}),
-            r'failed to parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
+            r'parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
             id="non-string grant types",
         ),
         pytest.param(
             (200, {"grant_types_supported": ["something", 123]}),
-            r'failed to parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
+            r'parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
             id="non-string grant types later in the list",
         ),
         pytest.param(
             (200, {"grant_types_supported": ["something", {}]}),
-            r'failed to parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
+            r'parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
             id="object grant types later in the list",
         ),
         pytest.param(
             (200, {"grant_types_supported": ["something", ["something"]]}),
-            r'failed to parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
+            r'parse OpenID discovery document: field "grant_types_supported" must be an array of strings',
             id="embedded array grant types later in the list",
         ),
         pytest.param(
@@ -2293,7 +2295,7 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                     "issuer": 123,
                 },
             ),
-            r'failed to parse OpenID discovery document: field "issuer" must be a string',
+            r'parse OpenID discovery document: field "issuer" must be a string',
             id="non-string issuer after other valid fields",
         ),
         pytest.param(
@@ -2304,17 +2306,17 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                     "issuer": 123,
                 },
             ),
-            r'failed to parse OpenID discovery document: field "issuer" must be a string',
+            r'parse OpenID discovery document: field "issuer" must be a string',
             id="non-string issuer after other ignored fields",
         ),
         pytest.param(
             (200, {"token_endpoint": "https://256.256.256.256/"}),
-            r'failed to parse OpenID discovery document: field "issuer" is missing',
+            r'parse OpenID discovery document: field "issuer" is missing',
             id="missing issuer",
         ),
         pytest.param(
             (200, {"issuer": "{issuer}"}),
-            r'failed to parse OpenID discovery document: field "token_endpoint" is missing',
+            r'parse OpenID discovery document: field "token_endpoint" is missing',
             id="missing token endpoint",
         ),
         pytest.param(
@@ -2344,7 +2346,7 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                     "filler": "x" * 256 * 1024,
                 },
             ),
-            r"failed to fetch OpenID discovery document: response is too large",
+            r"fetch OpenID discovery document: response is too large",
             id="gigantic discovery response",
         ),
         pytest.param(
@@ -2352,7 +2354,7 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                 200,
                 RawResponse('{"":' + "[" * 16),
             ),
-            r"failed to parse OpenID discovery document: JSON is too deeply nested",
+            r"parse OpenID discovery document: JSON is too deeply nested",
             id="overly nested discovery response array",
         ),
         pytest.param(
@@ -2360,7 +2362,7 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                 200,
                 RawResponse('{"":' * 17),
             ),
-            r"failed to parse OpenID discovery document: JSON is too deeply nested",
+            r"parse OpenID discovery document: JSON is too deeply nested",
             id="overly nested discovery response object",
         ),
         pytest.param(
@@ -2375,7 +2377,7 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                     "device_authorization_endpoint": "https://256.256.256.256/dev",
                 },
             ),
-            r"failed to parse OpenID discovery document: the issuer identifier \(https://.*/path\) does not match oauth_issuer \(https://.*\)",
+            r"parse OpenID discovery document: issuer identifier \(https://.*/path\) does not match oauth_issuer \(https://.*\)",
             id="mismatched issuer identifier",
         ),
         pytest.param(
@@ -2393,7 +2395,7 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
                     }"""
                 ),
             ),
-            r'failed to parse OpenID discovery document: field "device_authorization_endpoint" is duplicated',
+            r'parse OpenID discovery document: field "device_authorization_endpoint" is duplicated',
             id="duplicated field",
         ),
         #
@@ -2403,14 +2405,14 @@ def test_oauth_discovery_server_error(accept, response, expected_error):
         pytest.param(
             (1000, {}),
             alt_patterns(
-                r"failed to fetch OpenID discovery document: Unsupported protocol \(.*\)",
-                r"failed to fetch OpenID discovery document: Weird server reply \(.*status.*\)",
+                r"fetch OpenID discovery document: Unsupported protocol \(.*\)",
+                r"fetch OpenID discovery document: Weird server reply \(.*status.*\)",
             ),
             id="invalid HTTP response code",
         ),
         pytest.param(
             (200, {"Content-Length": -1}, {}),
-            r"failed to fetch OpenID discovery document: Weird server reply \(.*Content-Length.*\)",
+            r"fetch OpenID discovery document: Weird server reply \(.*Content-Length.*\)",
             id="bad HTTP Content-Length",
         ),
     ],
