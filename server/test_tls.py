@@ -155,7 +155,7 @@ def test_direct_tls(ssl_ctx, connect, require_direct_ssl_support, protos):
     """
     conn = connect()
     ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ssl_ctx.ca)
-    ctx.set_alpn_protocols([ALPN_PROTO])
+    ctx.set_alpn_protocols(protos)
 
     # TODO: export a helper for this from pq3
     tls = pq3._TLSStream(conn, ctx, server_hostname="example.org")
