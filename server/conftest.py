@@ -8,6 +8,7 @@
 import collections
 import contextlib
 import os
+import pathlib
 import shutil
 import socket
 import subprocess
@@ -74,7 +75,21 @@ def _server_supports(datadir, guc):
 
 
 @pytest.fixture(scope="session")
-def postgres_instance(pytestconfig, unused_tcp_port_factory):
+def pkglibdir():
+    """
+    Provides the --pkglibdir for the local PG installation, or skips dependent
+    tests if we can't invoke pg_config.
+    """
+    try:
+        out = subprocess.check_output(["pg_config", "--pkglibdir"], text=True)
+    except FileNotFoundError:
+        pytest.skip("this test requires pg_config to be in the PATH")
+
+    return pathlib.Path(out.strip())
+
+
+@pytest.fixture(scope="session")
+def postgres_instance(pytestconfig, unused_tcp_port_factory, pkglibdir):
     """
     If --temp-instance has been passed to pytest, this fixture runs a temporary
     Postgres instance on an available port. Otherwise, the fixture will attempt
@@ -106,7 +121,13 @@ def postgres_instance(pytestconfig, unused_tcp_port_factory):
             "-c log_connections=on",
         ]
 
-        if _server_supports(datadir, "oauth_validator_libraries"):
+        # (Should we enable OAuth testing?)
+        validator_path = pkglibdir / "oauthtest.so"
+
+        if (
+            _server_supports(datadir, "oauth_validator_libraries")
+            and validator_path.exists()
+        ):
             options.extend(
                 [
                     "-c session_preload_libraries=oauthtest",

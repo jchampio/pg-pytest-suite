@@ -41,7 +41,8 @@ MAX_UINT16 = 2**16 - 1
 def _check_oauth_support(postgres_instance):
     """
     Automatically skips this test module if oauth_validator_libraries isn't
-    supported by the server we're testing.
+    supported by the server we're testing, or if the developer hasn't installed
+    our test validator.
     """
     host, port = postgres_instance
     conn = psycopg2.connect(host=host, port=port)
@@ -50,11 +51,16 @@ def _check_oauth_support(postgres_instance):
         c = conn.cursor()
 
         c.execute(
-            "SELECT name FROM pg_settings WHERE name = %s",
+            "SELECT setting FROM pg_settings WHERE name = %s",
             ("oauth_validator_libraries",),
         )
-        if c.fetchone() == None:
-            pytest.skip("server does not support oauth_validator_libraries")
+
+        row = c.fetchone()
+        if row == None:
+            pytest.skip("server version does not support oauth_validator_libraries")
+
+        if "oauthtest" not in row[0]:
+            pytest.skip("oauthtest validator not installed (see server/Makefile)")
 
 
 @contextlib.contextmanager
